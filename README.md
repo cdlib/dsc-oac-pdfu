@@ -1,4 +1,3 @@
-
 # `pdfu`
 
 creates a PDF from a URL to an EAD XML file
@@ -17,4 +16,12 @@ optional arguments:
   -t TEMPDIR, --tempdir TEMPDIR
   -w, --warnings        show python warnings supressed by default
   --loglevel LOGLEVEL
+```
+
+## install
+
+Requires `oac-ead-to-pdf` and some python modules, which are installed into a virtualenv and a subdirectory by running.
+
+```bash
+./init.sh
 ```
