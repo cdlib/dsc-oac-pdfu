@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+""" pdfu
+    creates a PDF from a URL to an EAD XML file
+"""
+from __future__ import unicode_literals
+import sys
+import os, inspect
+import argparse
+import tempfile
+import urllib2
+import urllib
+import math
+import logging
+import shutil
+import StringIO
+
+def main(argv=None):
+
+    parser = argparse.ArgumentParser( description='takes an EAD file and turn it into a PDF')
+    parser.add_argument('url', nargs=1, help="URL or path to source EAD XML file" )
+    parser.add_argument('outfile', nargs=1, help="name for new PDF" )
+    parser.add_argument('-t', '--tempdir', required=False)
+    parser.add_argument('-w', '--warnings', default=False, help="show python warnings supressed by default", required=False, action='store_true')
+    parser.add_argument('--loglevel', default='INFO', required=False)
+
+    if argv is None:
+        argv = parser.parse_args()
+
+    if not argv.warnings:
+        # supress warnings
+        # http://stackoverflow.com/a/2047600/1763984
+        import warnings
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+    if argv.tempdir:
+        tempfile.tempdir = argv.tempdir
+
+    # Info: http://stackoverflow.com/a/6098238/1763984
+    # realpath() with make your script run, even if you symlink it :)
+    cmd_folder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile( inspect.currentframe() ))[0]))
+    if cmd_folder not in sys.path:
+        sys.path.insert(0, cmd_folder)
+    # use this if you want to include modules from a subforder
+    pdf_dir= os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect.getfile( inspect.currentframe() ))[0],"oac-ead-to-pdf")))
+    os.environ['CLASSPATH']=u''.join([pdf_dir,'/javalib/lib/saxonb-8.9.jar:',pdf_dir,'/javalib/classes'])
+    virtualenv_dir = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect.getfile( inspect.currentframe() ))[0],"ve/lib/python2.6/site-packages")))
+    for cmd_subfolder in [ pdf_dir, virtualenv_dir ]:
+        if cmd_subfolder not in sys.path:
+            sys.path.insert(0, cmd_subfolder)
+    # cmd_folder = os.path.dirname(os.path.abspath(__file__)) # DO NOT USE __file__ !!!
+    # __file__ fails if script is called in different ways on Windows
+    # __file__ fails if someone does os.chdir() before
+    # sys.argv[0] also fails because it doesn't not always contains the path
+
+    numeric_level = getattr(logging, argv.loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+    logging.basicConfig(level=numeric_level, )
+
+
+    # call the function that does the work
+    createPDF(argv.url[0], argv.outfile[0], cmd_folder)
+
+def createPDF(url, outfile, cmd_folder):
+    import pdf_gen
+
+    # download XML file
+    (inputfile, tdir, baseFile) = downloadChunks(url)
+
+    xslt=u''.join([cmd_folder,'/oac-ead-to-pdf/oac4_to_pdf.xslt'])
+    odir = u''.join(['subdir=', tdir]) # http://www.youtube.com/watch?v=DvWF9Q9PPsE#t=102s
+    generator = pdf_gen.OAC_EADtoPDFGenerator(xslt)
+    (completed, timeouts, errors, skipped) = generator.pdf_gen_file(inputfile, timeoutSecs=86400, outdir_option=odir, force=True,)
+    path_to_pdf_file=completed[0][1]
+    if os.stat(path_to_pdf_file).st_size == 0:
+        print "generated PDF is empty"
+        raise
+    else:
+        logging.getLogger('PDFU').info("good job, outfile \"%s\" is not zero sized" % (outfile))
+        os.rename(path_to_pdf_file, outfile)
+        # os.removedirs(tdir)
+
+def downloadChunks(url):
+    """Helper to download large files the only arg is a url this file will go to a temp directory
+       the file will also be downloaded in chunks and print out how much remains https://gist.github.com/gourneau/1430932 
+    """
+ 
+    baseFile = os.path.basename(url)
+    temp_path = tempfile.mkdtemp(prefix="pdfu")
+
+    try:
+        file = os.path.join(temp_path,baseFile)
+ 
+        req = urllib.urlopen(url)
+        # total_size = int(req.info().getheader('Content-Length').strip())
+        downloaded = 0
+        CHUNK = 256 * 10240
+        with open(file, 'wb') as fp:
+            while True:
+                chunk = req.read(CHUNK)
+                downloaded += len(chunk)
+                # print math.floor( (downloaded / total_size) * 100 )
+                if not chunk: break
+                fp.write(chunk)
+    except urllib2.HTTPError, e:
+        print "HTTP Error:",e.code , url
+        return False
+    except urllib2.URLError, e:
+        print "URL Error:",e.reason , url
+        return False
+ 
+    return file, temp_path, baseFile
+    
+#use it like this
+#downloadChunks("http://localhost/a.zip")
+
+
+# main() idiom for importing into REPL for debugging 
+if __name__ == "__main__":
+
+    sys.exit(main())
