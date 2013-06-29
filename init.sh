@@ -1,6 +1,15 @@
 set -eu
 
-virtualenv --system-site-packages ve
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )" # http://stackoverflow.com/questions/59895
+cd $DIR
+
+if [[ ! -z ${1-} ]]; then
+    extra_opts="-p $1"
+else
+    extra_opts=""
+fi
+
+virtualenv $extra_opts --system-site-packages ve
 set +u
 . ve/bin/activate
 set -u
