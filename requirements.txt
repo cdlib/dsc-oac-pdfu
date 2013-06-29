@@ -1,0 +1,4 @@
+reportlab
+xhtml2pdf
+pisa
+BeautifulSoup
