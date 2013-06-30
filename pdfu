@@ -52,11 +52,22 @@ def main(argv=None):
     # __file__ fails if someone does os.chdir() before
     # sys.argv[0] also fails because it doesn't not always contains the path
 
+    # activate virtualenv
+    # http://stackoverflow.com/a/14792407/1763984
+    activate_this_file = u''.join([cmd_folder, "/ve/bin/activate_this.py"])
+    print activate_this_file
+    if os.path.isfile(activate_this_file):
+        execfile(activate_this_file, dict(__file__=activate_this_file))
+    
+    # set debugging level
     numeric_level = getattr(logging, argv.loglevel.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % loglevel)
     logging.basicConfig(level=numeric_level, )
 
+    if not which('java'):
+        print "needs java"
+        raise
 
     # call the function that does the work
     createPDF(argv.url[0], argv.outfile[0], cmd_folder)
@@ -113,6 +124,25 @@ def downloadChunks(url):
     
 #use it like this
 #downloadChunks("http://localhost/a.zip")
+
+# http://stackoverflow.com/a/377028/1763984
+def which(program):
+    import os
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
 
 
 # main() idiom for importing into REPL for debugging 
