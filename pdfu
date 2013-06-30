@@ -21,6 +21,7 @@ def main(argv=None):
     parser.add_argument('outfile', nargs=1, help="name for new PDF" )
     parser.add_argument('-t', '--tempdir', required=False)
     parser.add_argument('-w', '--warnings', default=False, help="show python warnings supressed by default", required=False, action='store_true')
+    parser.add_argument('-s', '--skipmodify', default=False, required=False, action='store_true')
     parser.add_argument('--loglevel', default='INFO', required=False)
 
     if argv is None:
@@ -34,6 +35,10 @@ def main(argv=None):
 
     if argv.tempdir:
         tempfile.tempdir = argv.tempdir
+
+    modify_pdf_monkeypatch = None
+    if argv.skipmodify:
+        modify_pdf_monkeypatch = skip_modify_pdf
 
     # Info: http://stackoverflow.com/a/6098238/1763984
     # realpath() with make your script run, even if you symlink it :)
@@ -69,21 +74,20 @@ def main(argv=None):
         raise
 
     # call the function that does the work
-    createPDF(argv.url[0], argv.outfile[0], cmd_folder)
+    createPDF(argv.url[0], argv.outfile[0], cmd_folder, modify_pdf_monkeypatch)
 
 # http://mail.python.org/pipermail/python-dev/2008-January/076194.html
 # http://stackoverflow.com/a/2375450/1763984
 # http://wiki.zope.org/zope2/MonkeyPatch/
-def modify_pdf(self, PDFfile, docInfo):
+# http://stackoverflow.com/a/2375443/1763984
+def skip_modify_pdf(self, PDFfile, docInfo):
     logger = logging.getLogger('PDFU')
-    logger.info("IN monkeypatched MODIFY PDF FOR : %s" % PDFfile)
+    logger.info("monkeypatch _SKIP_ MODIFY PDF FOR : %s" % PDFfile)
 
-def createPDF(url, outfile, cmd_folder):
-    # http://stackoverflow.com/a/2375443/1763984
-    # import bar
-    # bar.do_something_expensive = lambda: 'Something really cheap.'
+def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
     import pdf_gen
-    pdf_gen.PostProcessor_OACEAD.modify_pdf = modify_pdf
+    if modify_pdf_monkeypatch:
+        pdf_gen.PostProcessor_OACEAD.modify_pdf = modify_pdf_monkeypatch
 
     # download XML file
     (inputfile, tdir, baseFile) = downloadChunks(url)
@@ -91,7 +95,10 @@ def createPDF(url, outfile, cmd_folder):
     xslt=u''.join([cmd_folder,'/oac-ead-to-pdf/oac4_to_pdf.xslt'])
     odir = u''.join(['subdir=', tdir]) # http://www.youtube.com/watch?v=DvWF9Q9PPsE#t=102s
     generator = pdf_gen.OAC_EADtoPDFGenerator(xslt)
+    assert generator
     (completed, timeouts, errors, skipped) = generator.pdf_gen_file(inputfile, timeoutSecs=86400, outdir_option=odir, force=True,)
+    assert not errors
+    assert completed[0][1]
     path_to_pdf_file=completed[0][1]
     if os.stat(path_to_pdf_file).st_size == 0:
         logging.getLogger('PDFU').error("generated pdf is empty")
@@ -101,6 +108,13 @@ def createPDF(url, outfile, cmd_folder):
         moveIt(path_to_pdf_file, outfile)
         # os.removedirs(tdir)
 
+#def wat(var):
+#    for v in var:
+#        print type(v)
+#        print dir(v)
+#        print v
+#        pp.pprint(v)
+
 
 def downloadChunks(url):
     """Helper to download large files the only arg is a url this file will go to a temp directory
@@ -109,6 +123,8 @@ def downloadChunks(url):
  
     baseFile = os.path.basename(url)
     temp_path = tempfile.mkdtemp(prefix="pdfu")
+
+    logging.getLogger('PDFU').error("temp path %s" % temp_path )
 
     try:
         file = os.path.join(temp_path,baseFile)
