@@ -71,17 +71,19 @@ def main(argv=None):
     # call the function that does the work
     createPDF(argv.url[0], argv.outfile[0], cmd_folder)
 
+# http://mail.python.org/pipermail/python-dev/2008-January/076194.html
+# http://stackoverflow.com/a/2375450/1763984
+# http://wiki.zope.org/zope2/MonkeyPatch/
 def modify_pdf(self, PDFfile, docInfo):
     logger = logging.getLogger('PDFU')
     logger.info("IN monkeypatched MODIFY PDF FOR : %s" % PDFfile)
-
 
 def createPDF(url, outfile, cmd_folder):
     # http://stackoverflow.com/a/2375443/1763984
     # import bar
     # bar.do_something_expensive = lambda: 'Something really cheap.'
     import pdf_gen
-    pdf_gen.modify_pdf = lambda: modify_pdf
+    pdf_gen.PostProcessor_OACEAD.modify_pdf = modify_pdf
 
     # download XML file
     (inputfile, tdir, baseFile) = downloadChunks(url)
