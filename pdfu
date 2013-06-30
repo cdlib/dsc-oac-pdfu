@@ -55,7 +55,6 @@ def main(argv=None):
     # activate virtualenv
     # http://stackoverflow.com/a/14792407/1763984
     activate_this_file = u''.join([cmd_folder, "/ve/bin/activate_this.py"])
-    print activate_this_file
     if os.path.isfile(activate_this_file):
         execfile(activate_this_file, dict(__file__=activate_this_file))
     
@@ -66,7 +65,7 @@ def main(argv=None):
     logging.basicConfig(level=numeric_level, )
 
     if not which('java'):
-        print "needs java"
+        logging.getLogger('PDFU').error("no java found")
         raise
 
     # call the function that does the work
@@ -84,12 +83,13 @@ def createPDF(url, outfile, cmd_folder):
     (completed, timeouts, errors, skipped) = generator.pdf_gen_file(inputfile, timeoutSecs=86400, outdir_option=odir, force=True,)
     path_to_pdf_file=completed[0][1]
     if os.stat(path_to_pdf_file).st_size == 0:
-        print "generated PDF is empty"
+        logging.getLogger('PDFU').error("generated pdf is empty")
         raise
     else:
         logging.getLogger('PDFU').info("good job, outfile \"%s\" is not zero sized" % (outfile))
-        os.rename(path_to_pdf_file, outfile)
+        moveIt(path_to_pdf_file, outfile)
         # os.removedirs(tdir)
+
 
 def downloadChunks(url):
     """Helper to download large files the only arg is a url this file will go to a temp directory
@@ -101,8 +101,8 @@ def downloadChunks(url):
 
     try:
         file = os.path.join(temp_path,baseFile)
- 
-        req = urllib.urlopen(url)
+         
+        req = urllib.urlopen(url)  # urllib works with normal file paths
         # total_size = int(req.info().getheader('Content-Length').strip())
         downloaded = 0
         CHUNK = 256 * 10240
@@ -144,6 +144,21 @@ def which(program):
 
     return None
 
+def moveIt(place1, place2):
+    if place2.startswith("s3://"):
+        s3move(place1, place2)
+    else:
+        os.rename(place1, place2)
+
+def s3move(place1, place2):
+    import boto
+    import urlparse
+    parts = urlparse.urlsplit(place2)  # SplitResult(scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
+    s3 = boto.connect_s3()
+    bucket = s3.get_bucket(parts.netloc)  # TODO; add a --create-bucket option that will use s3.create_bucket
+    key = bucket.new_key(parts.path)
+    key.set_contents_from_filename(place1)
+    key.set_acl('public-read')
 
 # main() idiom for importing into REPL for debugging 
 if __name__ == "__main__":
