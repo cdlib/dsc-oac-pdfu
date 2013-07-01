@@ -13,6 +13,8 @@ import math
 import logging
 import shutil
 import StringIO
+import time
+import resource
 
 def main(argv=None):
 
@@ -22,7 +24,7 @@ def main(argv=None):
     parser.add_argument('-t', '--tempdir', required=False)
     parser.add_argument('-w', '--warnings', default=False, help="show python warnings supressed by default", required=False, action='store_true')
     parser.add_argument('-s', '--skipmodify', default=False, required=False, action='store_true')
-    parser.add_argument('--loglevel', default='INFO', required=False)
+    parser.add_argument('--loglevel', default='ERROR', required=False)
 
     if argv is None:
         argv = parser.parse_args()
@@ -89,24 +91,37 @@ def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
     if modify_pdf_monkeypatch:
         pdf_gen.PostProcessor_OACEAD.modify_pdf = modify_pdf_monkeypatch
 
+    start_time = original_start_time = time.time()
+
     # download XML file
     (inputfile, tdir, baseFile) = downloadChunks(url)
+    download_time = time.time() - start_time
+    start_time = time.time()
 
     xslt=u''.join([cmd_folder,'/oac-ead-to-pdf/oac4_to_pdf.xslt'])
     odir = u''.join(['subdir=', tdir]) # http://www.youtube.com/watch?v=DvWF9Q9PPsE#t=102s
     generator = pdf_gen.OAC_EADtoPDFGenerator(xslt)
     assert generator
     (completed, timeouts, errors, skipped) = generator.pdf_gen_file(inputfile, timeoutSecs=86400, outdir_option=odir, force=True,)
+    generator_time = time.time() - start_time
+    start_time = time.time()
     assert not errors
     assert completed[0][1]
     path_to_pdf_file=completed[0][1]
-    if os.stat(path_to_pdf_file).st_size == 0:
+    pdf_size = os.stat(path_to_pdf_file).st_size
+    ead_size = os.stat(inputfile).st_size
+    maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if pdf_size == 0:
         logging.getLogger('PDFU').error("generated pdf is empty")
         raise
     else:
         logging.getLogger('PDFU').info("good job, outfile \"%s\" is not zero sized" % (outfile))
         moveIt(path_to_pdf_file, outfile)
-        # os.removedirs(tdir)
+        shutil.rmtree(tdir)
+        move_time = time.time() - start_time
+    total_time = time.time() - original_start_time
+    print "OK url={0} ead_size={1} pdf_size={2} download_time={3} generator_time={4} move_time={5} total_time={6} maxrss={7}".format(
+                               url, ead_size, pdf_size, download_time, generator_time, move_time, total_time, maxrss)
 
 #def wat(var):
 #    for v in var:
@@ -124,7 +139,7 @@ def downloadChunks(url):
     baseFile = os.path.basename(url)
     temp_path = tempfile.mkdtemp(prefix="pdfu")
 
-    logging.getLogger('PDFU').error("temp path %s" % temp_path )
+    logging.getLogger('PDFU').info("temp path %s" % temp_path )
 
     try:
         file = os.path.join(temp_path,baseFile)
