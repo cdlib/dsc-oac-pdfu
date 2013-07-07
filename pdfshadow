@@ -4,13 +4,14 @@
 """
 from __future__ import unicode_literals
 import sys
-import os, inspect
+import os
 import argparse
 import logging
 import boto
 import urlparse
 import tarfile
 import StringIO
+import time
 
 def main(argv=None):
 
@@ -42,10 +43,14 @@ def shadow(bucketurl, archive):
             # write directly to a tar file http://stackoverflow.com/a/740839/1763984
             shadowfile = StringIO.StringIO()
             shadowfile.write(str(key.size))
+            shadowfile.seek(0)
             info = tarfile.TarInfo(name=os.path.join(u'pdfshadow', key.name))
             info.size = len(shadowfile.buf)
-            shadowfile.close()
+            # boto last_modified to Datetime http://stackoverflow.com/a/9688496/1763984
+            # Datetime to unixtime http://stackoverflow.com/a/255053/1763984
+            info.mtime = time.mktime(boto.utils.parse_ts(key.last_modified).timetuple())
             tar.addfile(tarinfo=info, fileobj=shadowfile)
+            shadowfile.close()
 
 # main() idiom for importing into REPL for debugging 
 if __name__ == "__main__":
