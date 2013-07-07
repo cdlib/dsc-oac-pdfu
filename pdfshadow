@@ -9,12 +9,14 @@ import argparse
 import logging
 import boto
 import urlparse
+import tarfile
+import StringIO
 
 def main(argv=None):
 
     parser = argparse.ArgumentParser( description='create shadow directory for XTF')
     parser.add_argument('bucket', nargs=1, help="s3://bucket[/optional/path]")
-    parser.add_argument('shadowdir', nargs=1, help="Output Directory" )
+    parser.add_argument('archive', nargs=1, help="filename for .tar.gz shadow file" )
     parser.add_argument('--loglevel', default='ERROR', required=False)
 
     if argv is None:
@@ -27,22 +29,23 @@ def main(argv=None):
     logging.basicConfig(level=numeric_level, )
 
     # call the function that does the work
-    shadow(argv.bucket[0], argv.shadowdir[0])
+    shadow(argv.bucket[0], argv.archive[0])
 
-def shadow(bucketurl, dir):
+def shadow(bucketurl, archive):
     parts = urlparse.urlsplit(bucketurl)  # SplitResult(scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
     s3 = boto.connect_s3()
     bucket = s3.get_bucket(parts.netloc)
+    tar = tarfile.open(archive, "w:gz")
     for key in bucket.list():
         # look for pdfs that match the user supplied path
         if key.name.endswith(u'.pdf') and not parts.path or key.name.startswith(parts.path[1:]):
-            shadowdir, shadowfile = os.path.split(key.name)
-            shadowdir = os.path.join(dir, shadowdir)
-            if not os.path.isdir(shadowdir):
-                os.makedirs(shadowdir)
-            shadowfile = open(os.path.join(shadowdir, shadowfile), "w")
+            # write directly to a tar file http://stackoverflow.com/a/740839/1763984
+            shadowfile = StringIO.StringIO()
             shadowfile.write(str(key.size))
+            info = tarfile.TarInfo(name=os.path.join(u'pdfshadow', key.name))
+            info.size = len(shadowfile.buf)
             shadowfile.close()
+            tar.addfile(tarinfo=info, fileobj=shadowfile)
 
 # main() idiom for importing into REPL for debugging 
 if __name__ == "__main__":
