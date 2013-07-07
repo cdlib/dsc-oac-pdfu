@@ -1,0 +1,46 @@
+#!/bin/env python
+from lxml.html import parse
+import requests
+import os
+import boto.utils
+import boto
+
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
+
+def check_url(url, last_modified_domain, files_to_generate):
+    dir, ext = os.path.splitext(url)
+    if ext == '.xml':
+        check_xml(url, last_modified_domain, files_to_generate)
+    elif not ext:
+        check_dir(url, last_modified_domain, files_to_generate)
+
+def check_dir(url, last_modified_domain, files_to_generate):
+    doc = parse(url).getroot()
+    doc.make_links_absolute()
+    links = doc.xpath("//a[@href]/@href")
+    for link in links:
+        if not link == url and link.startswith(url):
+            check_url(link, last_modified_domain, files_to_generate)
+
+def check_xml(url, last_modified_domain, files_to_generate):
+    r = requests.head(url)
+    last_modified_on_oac = boto.utils.parse_ts(r.headers['last-modified']).timetuple()
+    pp.pprint(last_modified_on_oac)
+    # if the URL is not in the last_modified_domain OR last-modified is later than the database; add
+    # the file to the list of files to be processed
+
+def lanuch_ec2:
+    return
+
+def generate_cloudinit:
+    return
+
+sdb = boto.connect_sdb()
+last_modified_domain = sdb.get_domain('ead_last_modified')
+files_to_generate = []
+check_url("http://voro.cdlib.org/oac-ead/prime2002/", last_modified_domain, files_to_generate)
+# files to generate will be filled up; can now launch an EC2 and run the batch
+
+
+
