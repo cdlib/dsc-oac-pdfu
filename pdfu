@@ -9,10 +9,8 @@ import argparse
 import tempfile
 import urllib2
 import urllib
-import math
 import logging
 import shutil
-import StringIO
 import time
 import resource
 
@@ -68,7 +66,7 @@ def main(argv=None):
     # set debugging level
     numeric_level = getattr(logging, argv.loglevel.upper(), None)
     if not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % loglevel)
+        raise ValueError('Invalid log level: %s' % argv.loglevel)
     logging.basicConfig(level=numeric_level, )
 
     if not which('java'):
