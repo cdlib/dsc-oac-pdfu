@@ -82,7 +82,7 @@ set -eu
 cd
 git clone https://github.com/tingletech/pdfu.git
 ./pdfu/init.sh
-xargs -I {} -P 7 -n 1 | ./pdfu/pdfu {} <<!
+xargs -I {} -P 7 -n 1 ./pdfu/pdfu {} <<!
 """
     boilerplate_end="""
 !
