@@ -15,24 +15,19 @@ import time
 
 def main(argv=None):
 
-    parser = argparse.ArgumentParser( description='create shadow directory for XTF')
+    parser = argparse.ArgumentParser( description='create shadow directory for XTF', 
+                                      epilog='XTF can check this' )
     parser.add_argument('bucket', nargs=1, help="s3://bucket[/optional/path]")
     parser.add_argument('archive', nargs=1, help="filename for .tar.gz shadow file" )
-    parser.add_argument('--loglevel', default='ERROR', required=False)
+    parser.add_argument('--prefix', default='pdf-shadow', required=False, help="path the .tar.gz will unpack to")
 
     if argv is None:
         argv = parser.parse_args()
 
-    # set debugging level
-    numeric_level = getattr(logging, argv.loglevel.upper(), None)
-    if not isinstance(numeric_level, int):
-        raise ValueError('Invalid log level: %s' % argv.loglevel)
-    logging.basicConfig(level=numeric_level, )
-
     # call the function that does the work
-    shadow(argv.bucket[0], argv.archive[0])
+    shadow(argv.bucket[0], argv.archive[0], argv.prefix)
 
-def shadow(bucketurl, archive):
+def shadow(bucketurl, archive, prefix):
     parts = urlparse.urlsplit(bucketurl)  # SplitResult(scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
     s3 = boto.connect_s3()
     bucket = s3.get_bucket(parts.netloc)
@@ -44,7 +39,8 @@ def shadow(bucketurl, archive):
             shadowfile = StringIO.StringIO()
             shadowfile.write(str(key.size))
             shadowfile.seek(0)
-            info = tarfile.TarInfo(name=os.path.join(u'pdfshadow', key.name))
+            shadowname = os.path.join(prefix, os.path.splitext(key.name)[0])
+            info = tarfile.TarInfo(shadowname)
             info.size = len(shadowfile.buf)
             # boto last_modified to Datetime http://stackoverflow.com/a/9688496/1763984
             # Datetime to unixtime http://stackoverflow.com/a/255053/1763984
