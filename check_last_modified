@@ -5,6 +5,7 @@ import os
 import boto.utils
 import boto
 import StringIO
+import datetime
 
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
@@ -32,7 +33,8 @@ def check_xml(url, last_modified_domain, files_to_generate):
     # the file to the list of files to be processed
     last_modified_item = last_modified_domain.get_item(url)
     if not last_modified_item:
-        add_to_list(url, last_modified_domain, files_to_generate)
+        if last_modified_on_oac > datetime.datetime(2013,07,01):
+            add_to_list(url, last_modified_domain, files_to_generate)
     elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item.last_modified):
         add_to_list(url, last_modified_domain, files_to_generate)
         
@@ -116,7 +118,8 @@ def vorotos3url(url):
 sdb = boto.connect_sdb()
 last_modified_domain = sdb.get_domain('ead_last_modified')
 files_to_generate = []
-check_url("http://voro.cdlib.org/oac-ead/prime2002/calb/", last_modified_domain, files_to_generate)
+check_url("http://voro.cdlib.org/oac-ead/prime2002/camjl/", last_modified_domain, files_to_generate)
 # files to generate will be filled up; can now launch an EC2 and run the batch
-pp.pprint(files_to_generate)
-launch_ec2(files_to_generate)
+if files_to_generate:
+    pp.pprint(files_to_generate)
+    launch_ec2(files_to_generate)
