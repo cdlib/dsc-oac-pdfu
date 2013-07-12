@@ -2,6 +2,9 @@
 from lxml.html import parse
 import requests
 import os
+import sys
+import logging
+import optparse
 import boto.utils
 import boto
 import StringIO
@@ -43,12 +46,23 @@ def check_xml(url, last_modified_domain, files_to_generate):
 def add_to_list(url, url_last_modified, last_modified_domain, files_to_generate):
     files_to_generate.append(url)
     # TODO: create/update the simplebd item with the new timestamp and batchID
-    print "ADDING TO WORK LIST:", url, url_last_modified
+    logging.info("ADDING TO WORK LIST:%s %s" % (url, url_last_modified))
     attrs = {'last_modified':datetime.datetime.strftime(url_last_modified, DATE_FMT)}
     last_modified_domain.put_attributes(url, attrs)
 
 def launch_ec2(files_to_generate):
     user_data = generate_cloudinit(files_to_generate)
+    #use boto to start instance
+    conn = boto.connect_ec2('us-east-1')
+    reservation = conn.run_instances('ami-05355a6c',
+            max_count=1, min_count=1,
+            key_name='UCLDC_keypair_0',
+            instance_type='m1.large',
+            security_groups = ['Solr', 'default'],
+            user_data=user_data,
+            monitoring_enabled=True,
+            instance_profile_name='s3-readonly'
+            )
     return
 
 def generate_cloudinit(files_to_generate):
@@ -120,11 +134,26 @@ def vorotos3url(url):
     fixup = url.replace('http://voro.cdlib.org/oac-ead/prime2002/','s3://pdf-generation/pdfs/')
     return u"%s.pdf" % ( os.path.splitext(fixup)[0] )
 
-sdb = boto.connect_sdb()
-last_modified_domain = sdb.get_domain('ead_last_modified')
-files_to_generate = []
-check_url("http://voro.cdlib.org/oac-ead/prime2002/", last_modified_domain, files_to_generate)
+def main(url_check_root, loglevel='ERROR'):
+    numeric_level = getattr(logging, loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % argv.loglevel)
+    logging.basicConfig(level=numeric_level, )
+    url_check_root = url_check_root.strip()
+    sdb = boto.connect_sdb()
+    last_modified_domain = sdb.get_domain('ead_last_modified')
+    files_to_generate = []
+    check_url(url_check_root, last_modified_domain, files_to_generate)
 # files to generate will be filled up; can now launch an EC2 and run the batch
-if files_to_generate:
-    pp.pprint(files_to_generate)
-    launch_ec2(files_to_generate)
+    if files_to_generate:
+        pp.pprint(files_to_generate)
+        launch_ec2(files_to_generate)
+
+if __name__=='__main__':
+    if len(sys.argv) < 2:
+        print "Usage: check_last_modfied <root url to check> --loglevel='DEBUG'"
+        sys.exit(1)
+    parser = optparse.OptionParser()
+    parser.add_option("-l", "--loglevel", dest="loglevel", help="logging module level", default='ERROR')
+    (options, args) = parser.parse_args()
+    main(args[0], loglevel=options.loglevel)
