@@ -10,6 +10,8 @@ import datetime
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
 
+DATE_FMT = '%Y-%m-%d %H:%M:%S'
+
 def check_url(url, last_modified_domain, files_to_generate):
     dir, ext = os.path.splitext(url)
     if ext == '.xml':
@@ -34,13 +36,16 @@ def check_xml(url, last_modified_domain, files_to_generate):
     last_modified_item = last_modified_domain.get_item(url)
     if not last_modified_item:
         if last_modified_on_oac > datetime.datetime(2013,07,01):
-            add_to_list(url, last_modified_domain, files_to_generate)
-    elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item.last_modified):
-        add_to_list(url, last_modified_domain, files_to_generate)
+            add_to_list(url, last_modified_on_oac, last_modified_domain, files_to_generate)
+    elif last_modified_on_oac > datetime.datetime.strptime(last_modified_item['last_modified'], DATE_FMT):
+        add_to_list(url, last_modified_on_oac, last_modified_domain, files_to_generate)
         
-def add_to_list(url, last_modified_domain, files_to_generate):
+def add_to_list(url, url_last_modified, last_modified_domain, files_to_generate):
     files_to_generate.append(url)
     # TODO: create/update the simplebd item with the new timestamp and batchID
+    print "ADDING TO WORK LIST:", url, url_last_modified
+    attrs = {'last_modified':datetime.datetime.strftime(url_last_modified, DATE_FMT)}
+    last_modified_domain.put_attributes(url, attrs)
 
 def launch_ec2(files_to_generate):
     user_data = generate_cloudinit(files_to_generate)
@@ -118,7 +123,7 @@ def vorotos3url(url):
 sdb = boto.connect_sdb()
 last_modified_domain = sdb.get_domain('ead_last_modified')
 files_to_generate = []
-check_url("http://voro.cdlib.org/oac-ead/prime2002/camjl/", last_modified_domain, files_to_generate)
+check_url("http://voro.cdlib.org/oac-ead/prime2002/", last_modified_domain, files_to_generate)
 # files to generate will be filled up; can now launch an EC2 and run the batch
 if files_to_generate:
     pp.pprint(files_to_generate)
