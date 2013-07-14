@@ -33,10 +33,12 @@ def check_xml(url, last_modified_domain, files_to_generate):
     # if the URL is not in the last_modified_domain OR last-modified is later than the database; add
     # the file to the list of files to be processed
     last_modified_item = last_modified_domain.get_item(url)
+    if last_modified_item:
+        pp(last_modified_item)
     if not last_modified_item:
         if last_modified_on_oac > datetime.datetime(2013,07,01):
             add_to_list(url, last_modified_domain, files_to_generate)
-    elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item.last_modified):
+    elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item["last_modified"]):
         add_to_list(url, last_modified_domain, files_to_generate)
         
 def add_to_list(url, last_modified_domain, files_to_generate):
