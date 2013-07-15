@@ -1,39 +1,83 @@
 #!/bin/env python
 from lxml.html import parse
 import requests
-import os
+import os, sys
 import boto.utils
 import boto
 import datetime
 from time import sleep
-from fabric.api import env, run, sudo
+from fabric.api import env, run, sudo, put
+import paramiko
 import fabric
+import StringIO
+import socket
 
 from pprint import pprint as pp
 
+
+def main(argv=None):
+    """ run a batch of PDF generation
+
+    keeps an amazon simple DB with an inventory of EAD files and last
+    modified dates, this persists between runs
+
+    check_url is a recursive modifier function (with side effects) that is
+    a web crawler that adds all the new EAD to an array `files_to_generate`
+    and updates the amazon simple db as needed
+
+    If there are files_to_generate, a spot purchase of an 8 core 30G RAM 
+    is initiated, and fabric is used to install `pdfu` and run the batch
+    in parallel using the -P option on xargs.
+
+    Once the batch has run, the spot machine is terminated.
+    
+    """
+    sdb = boto.connect_sdb()  	# amazon simple db
+    last_modified_domain = sdb.get_domain('ead_last_modified') # TODO; make this value a command line paramater
+    pp(last_modified_domain)
+    files_to_generate = []
+    print "generating list"
+    check_url("http://voro.cdlib.org/oac-ead/prime2002/", last_modified_domain, files_to_generate)
+    if files_to_generate:
+        print "creating batch file"
+        batch = generate_batch(files_to_generate)
+        print "launching ec2"
+        instance, hostname = launch_ec2()
+        print "polling for ssh"
+        poll_for_ssh(hostname)
+        print "creating pdf files on %s" % ( hostname ) 
+        remote_process_pdf(hostname, batch)
+        print "terminating %s" % ( instance ) 
+        terminate_ec2(instance)
+    
 def check_url(url, last_modified_domain, files_to_generate):
+    """check if a URL is an XML file or directory based on the string value """
     dir, ext = os.path.splitext(url)
+    # prime 2002 directory will have only .xml files or sub-directories
     if ext == '.xml':
         check_xml(url, last_modified_domain, files_to_generate)
     elif not ext:
         check_dir(url, last_modified_domain, files_to_generate)
 
 def check_dir(url, last_modified_domain, files_to_generate):
+    """scrape links from directory listing"""
     doc = parse(url).getroot()
     doc.make_links_absolute()
     links = doc.xpath("//a[@href]/@href")
     for link in links:
+        # skip links back to myself and don't go up directories
         if not link == url and link.startswith(url):
             check_url(link, last_modified_domain, files_to_generate)
 
 def check_xml(url, last_modified_domain, files_to_generate):
+    """compare last_modifed in head with value in  simple DB to see if this needs processing"""
     r = requests.head(url)
     last_modified_on_oac_header = r.headers['last-modified']
     last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
     # if the URL is not in the last_modified_domain OR last-modified is later than the database; add
     # the file to the list of files to be processed
     last_modified_item = last_modified_domain.get_item(url)
-    if last_modified_item:
+    if last_modified_item:   # this if should be temporary for debugging
         pp(last_modified_item)
     if not last_modified_item:
         if last_modified_on_oac > datetime.datetime(2013,07,01):
@@ -42,42 +86,61 @@ def check_xml(url, last_modified_domain, files_to_generate):
         add_to_list(url, last_modified_domain, files_to_generate)
         
 def add_to_list(url, last_modified_domain, files_to_generate):
+    """modify the files_to_generate list and last_modified_domain"""
     files_to_generate.append(url)
     # TODO: create/update the simplebd item with the new timestamp and batchID
 
 def launch_ec2():
     connection = boto.connect_ec2()
     reservation = connection.request_spot_instances(
-                                       "1.00",
+                                       "1.00",         # bid at on-demand rate
                                        "ami-05355a6c", # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
                                        key_name="majorTom-keypair",
-                                       placement="us-east-1b",
+                                       placement="us-east-1b",        #   should placement be more open ended?
                                        instance_profile_arn="arn:aws:iam::563907706919:instance-profile/s3-read-write",
-                                       #instance_type="m3.2xlarge")   #   1.00/hr    8vCPU       26 ECPU     30 G RAM
-                                       instance_type="t1.micro")
+                                       instance_type="m3.2xlarge")   #   1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
     spot_id = str(reservation[0].id)
     spot_reservation = connection.get_all_spot_instance_requests(spot_id)[0]
+    # poll for spot instance to start up
     while spot_reservation.instance_id == None:
         sleep(20)
         spot_reservation = connection.get_all_spot_instance_requests(spot_id)[0]
-    instance = connection.get_all_instances(spot_reservation.instance_id)[0].instance[0]
-    instance.add_tag("pdfu","pdfu")
+    instance = connection.get_all_instances(spot_reservation.instance_id)[0].instances[0]
+    instance.add_tag("Name","OAC_pdfu")
     hostname = instance.public_dns_name
     return spot_reservation.instance_id, hostname
+
+def poll_for_ssh(host):
+    # http://stackoverflow.com/a/2561727/1763984
+    # Set the timeout
+    original_timeout = socket.getdefaulttimeout()
+    new_timeout = 3
+    socket.setdefaulttimeout(new_timeout)
+    host_status = False
+    while not host_status:
+        try:
+            paramiko.Transport((host, 22))
+            host_status = True
+        except:
+            pass
+        sleep(20)
+    socket.setdefaulttimeout(original_timeout)
+    return host_status
 
 def terminate_ec2(instance):
     connection = boto.connect_ec2()
     return connection.get_all_instances(instance)[0].instances[0].terminate()
 
-def remote_process_pdf(hostname, files_to_generate):
+def remote_process_pdf(hostname, batch):
+    """use fabric to run commands on the remote working node"""
     SETUP_SUDO = [ 
-        'yum -y update    # for security',
+        'yum -y update',
         'yum -y install git',
         'yum -y groupinstall "Development Tools"',
         'easy_install pip',
         'pip install virtualenv',
-        'yum -y install python-devel  # needed to install(init?) virtualenv with local python',
-        'yum -y install ncurses-devel # needed to install pkgsrc python',
+        'yum -y install python-devel',
+        'yum -y install ncurses-devel',
         'yum -y install openssl-devel',
         'yum -y install libjpeg-devel',
         'yum -y install freetype-devel',
@@ -91,29 +154,33 @@ def remote_process_pdf(hostname, files_to_generate):
         './pdfu/init.sh',
     ]
     env.host_string = hostname
+    # fabric docs say fabric could hang if a command fails and recommend to use try/finally
     try:
         for command in SETUP_SUDO:
             sudo(command)
         for command in SETUP_RUN:
             run(command)
-        for url in files_to_generate:
-            command = "./pdfu/pdfu %s %s" % url, vorotos3url(url)
-            run(command)
+        put(batch, '/home/ec2-user/batch.txt')
+        run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/pdfu')
     finally:
         fabric.network.disconnect_all()
 
-def vorotos3url(url):
+def generate_batch(files_to_generate):
+    """turn the array of URLs into the args that will be passed to xargs on the remote node"""
+    batch = StringIO.StringIO()
+    for url in files_to_generate:
+        args = "%s %s\n" % ( url, fixup_url(url) )
+        batch.write(args)
+    batch.seek(0)
+    return batch
+
+def fixup_url(url):
+    """dirty path hacking specific to Online Archive of California here"""
     dir, ext = os.path.splitext(url)
-    fixup = url.replace('http://voro.cdlib.org/oac-ead/prime2002/','s3://pdf-generation/pdfs/')
+    fixup = url.replace('http://voro.cdlib.org/oac-ead/prime2002/','s3://pdf-generation/pdfs/') # TODO: should be supplied on the command line
     return u"%s.pdf" % ( os.path.splitext(fixup)[0] )
 
-sdb = boto.connect_sdb()
-last_modified_domain = sdb.get_domain('ead_last_modified')
-files_to_generate = []
-check_url("http://voro.cdlib.org/oac-ead/prime2002/", last_modified_domain, files_to_generate)
-# files to generate will be filled up; can now launch an EC2 and run the batch
-if files_to_generate:
-    pp(files_to_generate)
-    #instance, hostname = launch_ec2()
-    #remote_process_pdf(hostname, files_to_generate)
-    #terminate_ec2(instance)
+# main() idiom for importing into REPL for debugging 
+if __name__ == "__main__":
+    sys.exit(main())
+
