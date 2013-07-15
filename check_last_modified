@@ -7,11 +7,10 @@ import logging
 import optparse
 import boto.utils
 import boto
-import StringIO
 import datetime
+from time import sleep
 
-import pprint
-pp = pprint.PrettyPrinter(indent=4)
+from pprint import pprint as pp
 
 DATE_FMT = '%Y-%m-%d %H:%M:%S'
 
@@ -50,24 +49,42 @@ def add_to_list(url, url_last_modified, last_modified_domain, files_to_generate)
     attrs = {'last_modified':datetime.datetime.strftime(url_last_modified, DATE_FMT)}
     last_modified_domain.put_attributes(url, attrs)
 
-def launch_ec2(files_to_generate):
-    user_data = generate_cloudinit(files_to_generate)
-    #use boto to start instance
-    conn = boto.connect_ec2('us-east-1')
-    reservation = conn.run_instances('ami-05355a6c',
-            max_count=1, min_count=1,
-            key_name='UCLDC_keypair_0',
-            instance_type='m1.large',
-            security_groups = ['Solr', 'default'],
-            user_data=user_data,
-            monitoring_enabled=True,
-            instance_profile_name='s3-readonly'
-            )
+def launch_ec2():
+    user_data = generate_cloudinit()
+    connection = boto.connect_ec2()
+    reservation = connection.request_spot_instances(
+                                       "1.00",
+                                       "ami-05355a6c", # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
+                                       key_name="majorTom-keypair",
+                                       user_data=user_data,
+                                       placement="us-east-1b",
+                                       instance_profile_arn="arn:aws:iam::563907706919:instance-profile/s3-read-write",
+                                       #instance_type="m3.2xlarge")   #   1.00/hr    8vCPU       26 ECPU     30 G RAM
+                                       instance_type="t1.micro")   #   1.00/hr    8vCPU       26 ECPU     30 G RAM
+    spot_id = str(reservation[0].id)
+    spot_reservation = connection.get_all_spot_instance_requests(spot_id)[0]
+    while spot_reservation.instance_id == None:
+        sleep(20)
+        spot_reservation = connection.get_all_spot_instance_requests(spot_id)[0]
+
+    r = connection.get_all_instances(spot_reservation.instance_id)
+    hostname = r[0].instances[0].public_dns_name
+    return spot_reservation.instance_id, hostname
+
+def terminate_ec2(instance):
+    connection = boto.connect_ec2()
+    return connection.get_all_instances(instance)[0].instances[0].terminate()
+
+def remote_process_pdf(hostname, files_to_generate):
+    pp(files_to_generate)
+    pp(hostname)
+    # ssh to host
+    # poll for cloudinit to stop (or refactor not to use cloudinit; do that from here)
+    # use xargs -P to process PDF files on remote machine
     return
 
-def generate_cloudinit(files_to_generate):
-    # generate russian doll bash script
-    boilerplate_start="""
+def generate_cloudinit():
+    script="""
 #!/bin/bash
 # cloudinit script
 # https://help.ubuntu.com/community/CloudInit
@@ -103,31 +120,8 @@ set -eu
 cd
 git clone https://github.com/tingletech/pdfu.git
 ./pdfu/init.sh
-xargs -I {} -P 7 -n 1 ./pdfu/pdfu {} <<!
 """
-    boilerplate_end="""
-!
-EOSETUP
-su - pdfu -c ~pdfu/init.sh  
-rm ~pdfu/init.sh
-## TODO: save output of run to a file
-## TODO: post log output to an S3 bucket
-## TODO: terminate host
-"""
-
-    script = StringIO.StringIO()
-    script.write(boilerplate_start)
-    first = True
-    for url in files_to_generate:
-        if first:
-            first = False
-        else:
-            script.write("\n")
-        s3 = vorotos3url(url)
-        script.write(u"%s %s" % ( url, s3 ))
-    script.write(boilerplate_end)
-    script.seek(0)
-    print script.getvalue()
+    return script
 
 def vorotos3url(url):
     dir, ext = os.path.splitext(url)
@@ -147,7 +141,9 @@ def main(url_check_root, loglevel='ERROR'):
 # files to generate will be filled up; can now launch an EC2 and run the batch
     if files_to_generate:
         pp.pprint(files_to_generate)
-        launch_ec2(files_to_generate)
+        instance, hostname = launch_ec2()
+        remote_process_pdf(hostname, files_to_generate)
+        terminate_ec2(instance)
 
 if __name__=='__main__':
     if len(sys.argv) < 2:
