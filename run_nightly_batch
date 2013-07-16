@@ -41,7 +41,7 @@ def main(argv=None):
     parser.add_argument('eads', nargs=1, help="URL for crawler to start harvesting EAD XML, won't follow redirects")
     parser.add_argument('bucket', nargs=1, help="s3://bucket[/optional/path] where the generated PDF files go")
     parser.add_argument('shadow', nargs=1, help=".tar.gz filename to store \"shadow\" file archive for XTF")
-    parser.add_argument('--simpledb-domain', default='ead_last_modified', required=False, help="path the .tar.gz will unpack to")
+    parser.add_argument('--simpledb-domain', default='ead_last_modified', required=False, help="\"domain\"/name of Amazon Simple DB database")
     parser.add_argument('--shadow-prefix', default='pdf-shadow', required=False, help="path the .tar.gz will unpack to")
 
     if argv is None:

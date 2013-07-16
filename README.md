@@ -40,7 +40,7 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --simpledb-domain SIMPLEDB_DOMAIN
-                        path the .tar.gz will unpack to
+                        "domain"/name of Amazon Simple DB database
   --shadow-prefix SHADOW_PREFIX
                         path the .tar.gz will unpack to
 ```
