@@ -56,10 +56,15 @@ def main(argv=None):
     if files_to_generate:
         batch = generate_batch(files_to_generate, argv.eads[0], argv.bucket[0])
         instance, hostname = launch_ec2()
+        pp(instance)
+        pp(hostname)
+        pp(batch)
         poll_for_ssh(hostname)
+        pp("polled for ssh")
         remote_process_pdf(hostname, batch)
+        pp("ran remote ssh")
         terminate_ec2(instance)
-        shadow(argv.bucket[0], argv.shadow[0], argv.prefix)  ## TODO: move outside of if; and write to tmp file, doing a move at the end
+        shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)  ## TODO: move outside of if; and write to tmp file, doing a move at the end
     
 def check_url(url, last_modified_domain, files_to_generate):
     """check if a URL is an XML file or directory based on the string value """
