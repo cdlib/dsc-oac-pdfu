@@ -126,6 +126,7 @@ def shadow(bucketurl, archive, prefix):
             shadowfile.close()
     tmp.flush()
     shutil.move(tmp.name, archive)
+    os.chmod(archive, 0664)
 
 def launch_ec2():
     connection = boto.connect_ec2()
