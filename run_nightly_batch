@@ -33,7 +33,12 @@ def main(argv=None):
     in parallel using the -P option on xargs.
 
     Once the batch has run, the spot machine is terminated.
-    
+
+    The shadow file is regenerated even if there were no files to generate detected.
+
+    July 1, 2013 is hardcoded as the epic for file changes, because a
+    complete batch was run at this time.
+
     """
 
     parser = argparse.ArgumentParser(description="run the PDF batch")
@@ -56,7 +61,7 @@ def main(argv=None):
         poll_for_ssh(hostname)
         remote_process_pdf(hostname, batch)
         terminate_ec2(instance)
-    shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)  ## TODO: write to tmp file, doing a move at the end
+    shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
     
 def check_url(url, last_modified_domain, files_to_generate):
     """check if a URL is an XML file or directory based on the string value """
