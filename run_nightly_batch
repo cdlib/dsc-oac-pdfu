@@ -103,7 +103,7 @@ def shadow(bucketurl, archive, prefix):
     s3 = boto.connect_s3()
     bucket = s3.get_bucket(parts.netloc)
     tmp = tempfile.NamedTemporaryFile(delete=False)
-    tar = tarfile.open(tmp, "w:gz")
+    tar = tarfile.open(fileobj=tmp, mode="w:gz")
     for key in bucket.list():
         # look for pdfs that match the user supplied path
         if key.name.endswith(u'.pdf') and not parts.path or key.name.startswith(parts.path[1:]):
