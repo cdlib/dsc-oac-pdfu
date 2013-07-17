@@ -45,6 +45,20 @@ optional arguments:
                         path the .tar.gz will unpack to
 ```
 
+crontab
+
+```crontab
+# minute         0-59
+#   hour           0-23
+#     day of month   0-31
+#       month          0-12 (or names, see below)
+#         day of week    0-7 (0 or 7 is Sun, or use names)
+# Eastern timzone
+
+04 01 * * * ///appstrap/cronic/cronic ///code/pdfu/run_nightly_batch http:///oac-ead/prime2002/ s3:///pdf/ /usr/share/nginx/html/pdf-shadow.tar.gz 
+
+```
+
 ## install
 
 Requires `oac-ead-to-pdf` and some python modules, which are installed into a virtualenv and a subdirectory by running.
