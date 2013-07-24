@@ -18,6 +18,8 @@ import time
 import tempfile
 import shutil
 
+BATCH = datetime.datetime.now().isoformat()
+
 def main(argv=None):
     """ run a batch of PDF generation
 
@@ -51,6 +53,7 @@ def main(argv=None):
     if argv is None:
         argv = parser.parse_args()
 
+    print BATCH
     sdb = boto.connect_sdb()  	# amazon simple db
     last_modified_domain = sdb.get_domain(argv.simpledb_domain)
     files_to_generate = []
@@ -94,12 +97,12 @@ def check_xml(url, last_modified_domain, files_to_generate):
         if last_modified_on_oac > datetime.datetime(2013,07,01):
             add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
     elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item["last_modified"]):
-        add_to_list(url, last_modified_domain, files_to_generate)
+        add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
         
 def add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header):
     """modify the files_to_generate list and last_modified_domain"""
     files_to_generate.append(url)
-    attrs = {'last_modified': last_modified_on_oac_header , 'batch_id': 'testing' }
+    attrs = {'last_modified': last_modified_on_oac_header , 'batch_id': BATCH }
     last_modified_domain.put_attributes(url, attrs)
 
 def shadow(bucketurl, archive, prefix):
