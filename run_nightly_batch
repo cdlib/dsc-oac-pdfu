@@ -188,6 +188,7 @@ def remote_process_pdf(hostname, batch):
         'yum -y install libtiff-devel',
         'yum -y install lcms-devel',
         'yum -y install mercurial',
+        'echo halt | at now + 36 hours',
     ]
     SETUP_RUN = [
         'curl -L https://raw.github.com/ucldc/appstrap/master/cdl/ucldc-operator-keys.txt >> ~/.ssh/authorized_keys',
