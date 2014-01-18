@@ -9,7 +9,7 @@ else
     extra_opts=""
 fi
 
-virtualenv $extra_opts --system-site-packages ve
+virtualenv $extra_opts ve
 set +u
 . ve/bin/activate
 set -u
