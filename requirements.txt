@@ -1,4 +1,5 @@
 reportlab
+http://pybrary.net/pyPdf/pyPdf-1.13.tar.gz
 xhtml2pdf
 pisa
 BeautifulSoup
