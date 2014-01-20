@@ -37,10 +37,15 @@ def main(argv=None):
 
     Once the batch has run, the spot machine is terminated.
 
-    The shadow file is regenerated even if there were no files to generate detected.
+    The shadow file is regenerated even if there were no files to
+    generate detected.
 
     July 1, 2013 is hardcoded as the epic for file changes, because a
     complete batch was run at this time.
+
+    Epic reset to Dec 1, 2013 and simbledb domain re-set in order to
+    regenerate some backfiles.  Need to switch simble db to record what
+    actually gets created; not what gets batched.
 
     """
 
@@ -102,7 +107,7 @@ def check_xml(url, last_modified_domain, files_to_generate):
     # the file to the list of files to be processed
     last_modified_item = last_modified_domain.get_item(url)
     if not last_modified_item:
-        if last_modified_on_oac > datetime.datetime(2013,07,01):
+        if last_modified_on_oac > datetime.datetime(2013,12,01):
             add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
     elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item["last_modified"]):
         add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
