@@ -1,4 +1,6 @@
 #!/bin/env python
+# -*- coding: utf-8 -*-
+
 import argparse
 from lxml.html import parse
 import requests
@@ -20,6 +22,7 @@ import shutil
 from pprint import pprint as pp
 
 BATCH = datetime.datetime.now().isoformat()
+
 
 def main(argv=None):
     """ run a batch of PDF generation
@@ -63,20 +66,29 @@ def main(argv=None):
     sdb = boto.connect_sdb()  	# amazon simple db
     last_modified_domain = sdb.get_domain(argv.simpledb_domain)
     files_to_generate = []
+
     check_url(argv.eads[0], last_modified_domain, files_to_generate)
+
     if files_to_generate:
         print "there are files to generate"; sys.stdout.flush()
+
         batch = generate_batch(files_to_generate, argv.eads[0], argv.bucket[0])
         print "batch generated"; sys.stdout.flush()
+
         instance, hostname = launch_ec2()
         print "workhost launched |{0}| |{1}|".format(instance, hostname); sys.stdout.flush()
+
         poll_for_ssh(hostname)
         print "can contact host with ssh to {0}".format(hostname); sys.stdout.flush()
+
         remote_process_pdf(hostname, batch, instance)
+
         print "okay; done, terminate workhost"; sys.stdout.flush()
         terminate_ec2(instance)
+
     print "updating shadow file"; sys.stdout.flush()
     shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
+
     
 def check_url(url, last_modified_domain, files_to_generate):
     """check if a URL is an XML file or directory based on the string value """
@@ -87,9 +99,10 @@ def check_url(url, last_modified_domain, files_to_generate):
     elif not ext:
         check_dir(url, last_modified_domain, files_to_generate)
 
+
 def check_dir(url, last_modified_domain, files_to_generate):
     """scrape links from directory listing"""
-    sys.stdout.write('.'); sys.stdout.flush()
+    sys.stdout.write('•'); sys.stdout.flush()
     doc = parse(url).getroot()
     doc.make_links_absolute()
     links = doc.xpath("//a[@href]/@href")
@@ -98,6 +111,7 @@ def check_dir(url, last_modified_domain, files_to_generate):
         if not link == url and link.startswith(url):
             check_url(link, last_modified_domain, files_to_generate)
 
+
 def check_xml(url, last_modified_domain, files_to_generate):
     """compare last_modifed in head with value in  simple DB to see if this needs processing"""
     r = requests.head(url)
@@ -105,6 +119,7 @@ def check_xml(url, last_modified_domain, files_to_generate):
     last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
     # if the URL is not in the last_modified_domain OR last-modified is later than the database; add
     # the file to the list of files to be processed
+    # check here for failed batches and add
     last_modified_item = last_modified_domain.get_item(url)
     if not last_modified_item:
         if last_modified_on_oac > datetime.datetime(2013,12,01):
@@ -112,11 +127,17 @@ def check_xml(url, last_modified_domain, files_to_generate):
     elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item["last_modified"]):
         add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
         
+
 def add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header):
     """modify the files_to_generate list and last_modified_domain"""
+    # the logic here could be better... need to keep a list of succussful
+    # batches so failed batches can be re-tried
+    # but then also need a way to detect and mark pathological cases
     files_to_generate.append(url)
+    print(url)
     attrs = {'last_modified': last_modified_on_oac_header , 'batch_id': BATCH }
     last_modified_domain.put_attributes(url, attrs)
+
 
 def shadow(bucketurl, archive, prefix):
     """create shadow artifact for XTF index (so XTF can know what files are in the bucket and the PDF sizes"""
@@ -144,6 +165,7 @@ def shadow(bucketurl, archive, prefix):
     shutil.move(tmp.name, archive)
     os.chmod(archive, 0664)
 
+
 def launch_ec2():
     connection = boto.connect_ec2()
     print "connected, about to reserve"
@@ -170,9 +192,10 @@ def launch_ec2():
         print "needs hostname"
     while instance.public_dns_name == None:
         sleep(20)
-        sys.stdout.write('.'); sys.stdout.flush()
+        sys.stdout.write('·'); sys.stdout.flush()
     hostname = instance.public_dns_name
     return spot_reservation.instance_id, hostname
+
 
 def poll_for_ssh(host):
     # http://stackoverflow.com/a/2561727/1763984
@@ -185,16 +208,18 @@ def poll_for_ssh(host):
         try:
             paramiko.Transport((host, 22))
             host_status = True
-        except:
-            pass
+        except Exception as e:
+            pp(e)
         sleep(20)
-        sys.stdout.write('.'); sys.stdout.flush()
+        sys.stdout.write('⋅'); sys.stdout.flush()
     socket.setdefaulttimeout(original_timeout)
     return host_status
+
 
 def terminate_ec2(instance):
     connection = boto.connect_ec2()
     return connection.get_all_instances(instance)[0].instances[0].terminate()
+
 
 def remote_process_pdf(hostname, batch, instance):
     """use fabric to run commands on the remote working node"""
@@ -239,6 +264,7 @@ def remote_process_pdf(hostname, batch, instance):
     finally:
         fabric.network.disconnect_all()
 
+
 def generate_batch(files_to_generate, eads, bucket):
     """turn the array of URLs into the args that will be passed to xargs on the remote node"""
     batch = StringIO.StringIO()
@@ -247,6 +273,7 @@ def generate_batch(files_to_generate, eads, bucket):
         batch.write(args)
     batch.seek(0)
     return batch
+
 
 def fixup_url(url, eads, bucket):
     """dirty path hacking specific to Online Archive of California here"""
@@ -257,3 +284,34 @@ def fixup_url(url, eads, bucket):
 # main() idiom for importing into REPL for debugging 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+"""
+   Copyright (c) 2014, Regents of the University of California
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are
+   met:
+
+   - Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+   - Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+   - Neither the name of the University of California nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGE.
+"""
