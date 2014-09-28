@@ -19,6 +19,8 @@ import tarfile
 import time
 import tempfile
 import shutil
+from collections import namedtuple
+
 from pprint import pprint as pp
 
 BATCH = datetime.datetime.now().isoformat()
@@ -50,6 +52,8 @@ def main(argv=None):
     regenerate some backfiles.  Need to switch simble db to record what
     actually gets created; not what gets batched.
 
+    Epic reset to October 1, 2014.  --generate-all added to rebuild files
+
     """
 
     parser = argparse.ArgumentParser(description="run the PDF batch")
@@ -58,51 +62,63 @@ def main(argv=None):
     parser.add_argument('shadow', nargs=1, help=".tar.gz filename to store \"shadow\" file archive for XTF")
     parser.add_argument('--simpledb-domain', default='ead_last_modified', required=False, help="\"domain\"/name of Amazon Simple DB database")
     parser.add_argument('--shadow-prefix', default='pdf-shadow', required=False, help="path the .tar.gz will unpack to")
+    parser.add_argument('--generate-all', dest='all', action='store_true')
 
     if argv is None:
         argv = parser.parse_args()
 
-    print BATCH; sys.stdout.flush()
+    print BATCH
     sdb = boto.connect_sdb()  	# amazon simple db
     last_modified_domain = sdb.get_domain(argv.simpledb_domain)
     files_to_generate = []
 
-    check_url(argv.eads[0], last_modified_domain, files_to_generate)
+    print("checking for files to generate")
+
+    check_url(
+        argv.eads[0],
+        last_modified_domain,
+        files_to_generate,
+        generate_all=argv.all,
+    )
 
     if files_to_generate:
-        print "there are files to generate"; sys.stdout.flush()
+        print "there are files to generate"
 
-        batch = generate_batch(files_to_generate, argv.eads[0], argv.bucket[0])
-        print "batch generated"; sys.stdout.flush()
+        batch = generate_batch(
+            files_to_generate,
+            argv.eads[0],
+            argv.bucket[0],
+        )
+        print "batch generated"
 
         instance, hostname = launch_ec2()
-        print "workhost launched |{0}| |{1}|".format(instance, hostname); sys.stdout.flush()
+        print "workhost launched |{0}| |{1}|".format(instance, hostname)
 
         poll_for_ssh(hostname)
-        print "can contact host with ssh to {0}".format(hostname); sys.stdout.flush()
+        print "can contact host with ssh to {0}".format(hostname)
 
         remote_process_pdf(hostname, batch, instance)
 
-        print "okay; done, terminate workhost"; sys.stdout.flush()
+        print "okay; done, terminate workhost"
         terminate_ec2(instance)
 
-    print "updating shadow file"; sys.stdout.flush()
+    print "updating shadow file"
     shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
 
     
-def check_url(url, last_modified_domain, files_to_generate):
+def check_url(url, last_modified_domain, files_to_generate, generate_all=False):
     """check if a URL is an XML file or directory based on the string value """
     dir, ext = os.path.splitext(url)
     # prime 2002 directory will have only .xml files or sub-directories
     if ext == '.xml':
-        check_xml(url, last_modified_domain, files_to_generate)
+        check_xml(url, last_modified_domain, files_to_generate, generate_all=generate_all)
     elif not ext:
         check_dir(url, last_modified_domain, files_to_generate)
 
 
 def check_dir(url, last_modified_domain, files_to_generate):
     """scrape links from directory listing"""
-    sys.stdout.write('•'); sys.stdout.flush()
+    sys.stdout.write('•')
     doc = parse(url).getroot()
     doc.make_links_absolute()
     links = doc.xpath("//a[@href]/@href")
@@ -112,17 +128,21 @@ def check_dir(url, last_modified_domain, files_to_generate):
             check_url(link, last_modified_domain, files_to_generate)
 
 
-def check_xml(url, last_modified_domain, files_to_generate):
+def check_xml(url, last_modified_domain, files_to_generate, generate_all=False):
     """compare last_modifed in head with value in  simple DB to see if this needs processing"""
     r = requests.head(url)
     last_modified_on_oac_header = r.headers['last-modified']
     last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
-    # if the URL is not in the last_modified_domain OR last-modified is later than the database; add
-    # the file to the list of files to be processed
+    # if the URL is not in the last_modified_domain 
+    # OR last-modified is later than the database; 
+    # add the file to the list of files to be processed
+    #
     # check here for failed batches and add
     last_modified_item = last_modified_domain.get_item(url)
-    if not last_modified_item:
-        if last_modified_on_oac > datetime.datetime(2013,12,01):
+    if generate_all:
+        add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
+    elif not last_modified_item:
+        if last_modified_on_oac > datetime.datetime(2014,10,01):
             add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
     elif last_modified_on_oac > boto.utils.parse_ts(last_modified_item["last_modified"]):
         add_to_list(url, last_modified_domain, files_to_generate, last_modified_on_oac_header)
@@ -170,15 +190,17 @@ def launch_ec2():
     connection = boto.connect_ec2()
     print "connected, about to reserve"
     reservation = connection.request_spot_instances(
-                                       "1.00",         # bid at on-demand rate
-                                       "ami-05355a6c", # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
-                                       key_name="majorTom-keypair",
-                                       #placement="us-east-1b",        #   should placement be more open ended?
-                                       instance_profile_arn="arn:aws:iam::563907706919:instance-profile/s3-read-write",
-                                       instance_type="m3.2xlarge")   #   1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
+        "1.00",         # bid at on-demand rate
+        "ami-05355a6c", # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
+        key_name="majorTom-worker",
+        #placement="us-east-1b",        #   should placement be more open ended?
+        instance_profile_arn="arn:aws:iam::563907706919:instance-profile/s3-read-write",
+        instance_type="m3.2xlarge",     # 1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
+    )
     spot_id = str(reservation[0].id)
     print spot_id
-    spot_reservation = connection.get_all_spot_instance_requests(spot_id)[0]
+    Resholder = namedtuple('Resholder', 'instance_id status')
+    spot_reservation = Resholder(None, 'jumpstarting')
     # poll for spot instance to start up
     while spot_reservation.instance_id == None:
         pp(spot_reservation.status)
@@ -192,7 +214,7 @@ def launch_ec2():
         print "needs hostname"
     while instance.public_dns_name == None:
         sleep(20)
-        sys.stdout.write('·'); sys.stdout.flush()
+        sys.stdout.write('·')
     hostname = instance.public_dns_name
     return spot_reservation.instance_id, hostname
 
@@ -211,7 +233,7 @@ def poll_for_ssh(host):
         except Exception as e:
             pp(e)
         sleep(20)
-        sys.stdout.write('⋅'); sys.stdout.flush()
+        sys.stdout.write('⋅')
     socket.setdefaulttimeout(original_timeout)
     return host_status
 
@@ -283,6 +305,7 @@ def fixup_url(url, eads, bucket):
 
 # main() idiom for importing into REPL for debugging 
 if __name__ == "__main__":
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0) # http://stackoverflow.com/a/9462099/1763984
     sys.exit(main())
 
 
