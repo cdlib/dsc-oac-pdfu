@@ -4,7 +4,8 @@
 """
 from __future__ import unicode_literals
 import sys
-import os, inspect
+import os
+import inspect
 import argparse
 import tempfile
 import urllib2
@@ -14,14 +15,21 @@ import shutil
 import time
 import resource
 
+
 def main(argv=None):
 
-    parser = argparse.ArgumentParser( description='takes an EAD file and turn it into a PDF')
-    parser.add_argument('url', nargs=1, help="URL or path to source EAD XML file" )
-    parser.add_argument('outfile', nargs=1, help="name for new PDF" )
+    parser = argparse.ArgumentParser(
+        description='takes an EAD file and turn it into a PDF'
+    )
+    parser.add_argument('url', nargs=1,
+                        help="URL or path to source EAD XML file")
+    parser.add_argument('outfile', nargs=1, help="name for new PDF")
     parser.add_argument('-t', '--tempdir', required=False)
-    parser.add_argument('-w', '--warnings', default=False, help="show python warnings supressed by default", required=False, action='store_true')
-    parser.add_argument('-s', '--skipmodify', default=False, required=False, action='store_true')
+    parser.add_argument('-w', '--warnings', default=False,
+                        help="show python warnings supressed by default",
+                        required=False, action='store_true')
+    parser.add_argument('-s', '--skipmodify', default=False,
+                        required=False, action='store_true')
     parser.add_argument('--loglevel', default='ERROR', required=False)
 
     if argv is None:
@@ -42,17 +50,32 @@ def main(argv=None):
 
     # Info: http://stackoverflow.com/a/6098238/1763984
     # realpath() with make your script run, even if you symlink it :)
-    cmd_folder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile( inspect.currentframe() ))[0]))
+    cmd_folder = os.path.realpath(os.path.abspath(os.path.split(
+        inspect.getfile(inspect.currentframe())
+    )[0]))
     if cmd_folder not in sys.path:
         sys.path.insert(0, cmd_folder)
     # use this if you want to include modules from a subforder
-    pdf_dir= os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect.getfile( inspect.currentframe() ))[0],"oac-ead-to-pdf")))
-    os.environ['CLASSPATH']=u''.join([pdf_dir,'/javalib/lib/saxonb-8.9.jar:',pdf_dir,'/javalib/classes'])
-    virtualenv_dir = os.path.realpath(os.path.abspath(os.path.join(os.path.split(inspect.getfile( inspect.currentframe() ))[0],"ve/lib/python2.6/site-packages")))
-    for cmd_subfolder in [ pdf_dir, virtualenv_dir ]:
+    pdf_dir = os.path.realpath(os.path.abspath(os.path.join(os.path.split(
+        inspect.getfile(inspect.currentframe())
+    )[0], "oac-ead-to-pdf")))
+    os.environ['CLASSPATH'] = u''.join([
+        pdf_dir,
+        '/javalib/lib/saxonb-8.9.jar:',
+        pdf_dir,
+        '/javalib/classes',
+    ])
+    virtualenv_dir = os.path.realpath(os.path.abspath(os.path.join(
+        os.path.split(
+            inspect.getfile(inspect.currentframe())
+        )[0], "ve/lib/python2.6/site-packages"
+    )))
+    for cmd_subfolder in [pdf_dir, virtualenv_dir]:
         if cmd_subfolder not in sys.path:
             sys.path.insert(0, cmd_subfolder)
-    # cmd_folder = os.path.dirname(os.path.abspath(__file__)) # DO NOT USE __file__ !!!
+
+    # cmd_folder = os.path.dirname(os.path.abspath(__file__))
+    # DO NOT USE __file__ !!!
     # __file__ fails if script is called in different ways on Windows
     # __file__ fails if someone does os.chdir() before
     # sys.argv[0] also fails because it doesn't not always contains the path
@@ -62,7 +85,7 @@ def main(argv=None):
     activate_this_file = u''.join([cmd_folder, "/ve/bin/activate_this.py"])
     if os.path.isfile(activate_this_file):
         execfile(activate_this_file, dict(__file__=activate_this_file))
-    
+
     # set debugging level
     numeric_level = getattr(logging, argv.loglevel.upper(), None)
     if not isinstance(numeric_level, int):
@@ -76,6 +99,7 @@ def main(argv=None):
     # call the function that does the work
     createPDF(argv.url[0], argv.outfile[0], cmd_folder, modify_pdf_monkeypatch)
 
+
 # http://mail.python.org/pipermail/python-dev/2008-January/076194.html
 # http://stackoverflow.com/a/2375450/1763984
 # http://wiki.zope.org/zope2/MonkeyPatch/
@@ -83,6 +107,7 @@ def main(argv=None):
 def skip_modify_pdf(self, PDFfile, docInfo):
     logger = logging.getLogger('PDFU')
     logger.info("monkeypatch _SKIP_ MODIFY PDF FOR : %s" % PDFfile)
+
 
 def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
     import pdf_gen
@@ -96,16 +121,21 @@ def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
     download_time = time.time() - start_time
     start_time = time.time()
 
-    xslt=u''.join([cmd_folder,'/oac-ead-to-pdf/oac4_to_pdf.xslt'])
-    odir = u''.join(['subdir=', tdir]) # http://www.youtube.com/watch?v=DvWF9Q9PPsE#t=102s
+    xslt = u''.join([cmd_folder, '/oac-ead-to-pdf/oac4_to_pdf.xslt'])
+    odir = u''.join(['subdir=', tdir])
     generator = pdf_gen.OAC_EADtoPDFGenerator(xslt)
     assert generator
-    (completed, timeouts, errors, skipped) = generator.pdf_gen_file(inputfile, timeoutSecs=86400, outdir_option=odir, force=True,)
+    (completed, timeouts, errors, skipped) = generator.pdf_gen_file(
+        inputfile,
+        timeoutSecs=86400,
+        outdir_option=odir,
+        force=True,
+    )
     generator_time = time.time() - start_time
     start_time = time.time()
     # assert not errors
     # assert completed[0][1]
-    path_to_pdf_file = u''.join([os.path.splitext(inputfile)[0],'.pdf'])
+    path_to_pdf_file = u''.join([os.path.splitext(inputfile)[0], '.pdf'])
     pdf_size = os.stat(path_to_pdf_file).st_size
     ead_size = os.stat(inputfile).st_size
     maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -113,15 +143,28 @@ def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
         logging.getLogger('PDFU').error("generated pdf is empty")
         raise
     else:
-        logging.getLogger('PDFU').info("good job, outfile \"%s\" is not zero sized" % (outfile))
+        logging.getLogger('PDFU').info(
+            "good job, outfile \"%s\" is not zero sized" % (outfile)
+        )
         moveIt(path_to_pdf_file, outfile)
         shutil.rmtree(tdir)
         move_time = time.time() - start_time
     total_time = time.time() - original_start_time
-    print "OK url={0} ead_size={1} pdf_size={2} download_time={3} generator_time={4} move_time={5} total_time={6} maxrss={7}".format(
-                               url, ead_size, pdf_size, download_time, generator_time, move_time, total_time, maxrss)
+    print ("OK url={0} ead_size={1} pdf_size={2} download_time={3}"
+           "generator_time={4} move_time={5}"
+           " total_time={6} maxrss={7}").format(
+        url,
+        ead_size,
+        pdf_size,
+        download_time,
+        generator_time,
+        move_time,
+        total_time,
+        maxrss,
+    )
 
-#def wat(var):
+
+# def wat(var):
 #    for v in var:
 #        print type(v)
 #        print dir(v)
@@ -130,18 +173,20 @@ def createPDF(url, outfile, cmd_folder, modify_pdf_monkeypatch):
 
 
 def downloadChunks(url):
-    """Helper to download large files the only arg is a url this file will go to a temp directory
-       the file will also be downloaded in chunks and print out how much remains https://gist.github.com/gourneau/1430932 
+    """Helper to download large files the only arg is a url this file
+    will go to a temp directory
+       the file will also be downloaded in chunks and print out how much
+       remains https://gist.github.com/gourneau/1430932
     """
- 
+
     baseFile = os.path.basename(url)
     temp_path = tempfile.mkdtemp(prefix="pdfu")
 
-    logging.getLogger('PDFU').info("temp path %s" % temp_path )
+    logging.getLogger('PDFU').info("temp path %s" % temp_path)
 
     try:
-        file = os.path.join(temp_path,baseFile)
-         
+        file = os.path.join(temp_path, baseFile)
+
         req = urllib.urlopen(url)  # urllib works with normal file paths
         # total_size = int(req.info().getheader('Content-Length').strip())
         downloaded = 0
@@ -151,23 +196,25 @@ def downloadChunks(url):
                 chunk = req.read(CHUNK)
                 downloaded += len(chunk)
                 # print math.floor( (downloaded / total_size) * 100 )
-                if not chunk: break
+                if not chunk:
+                    break
                 fp.write(chunk)
     except urllib2.HTTPError, e:
-        print "HTTP Error:",e.code , url
+        print "HTTP Error:", e.code, url
         return False
     except urllib2.URLError, e:
-        print "URL Error:",e.reason , url
+        print "URL Error:", e.reason, url
         return False
- 
+
     return file, temp_path, baseFile
-    
-#use it like this
-#downloadChunks("http://localhost/a.zip")
+# use it like this
+# downloadChunks("http://localhost/a.zip")
+
 
 # http://stackoverflow.com/a/377028/1763984
 def which(program):
     import os
+
     def is_exe(fpath):
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
@@ -184,23 +231,28 @@ def which(program):
 
     return None
 
+
 def moveIt(place1, place2):
     if place2.startswith("s3://"):
         s3move(place1, place2)
     else:
         os.rename(place1, place2)
 
+
 def s3move(place1, place2):
     import boto
     import urlparse
-    parts = urlparse.urlsplit(place2)  # SplitResult(scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
+    parts = urlparse.urlsplit(place2)
+    # SplitResult
+    # (scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
     s3 = boto.connect_s3()
-    bucket = s3.get_bucket(parts.netloc)  # TODO; add a --create-bucket option that will use s3.create_bucket
+    # TODO; add a --create-bucket option that will use s3.create_bucket
+    bucket = s3.get_bucket(parts.netloc)
     key = bucket.new_key(parts.path)
     key.set_contents_from_filename(place1)
     key.set_acl('public-read')
 
-# main() idiom for importing into REPL for debugging 
+# main() idiom for importing into REPL for debugging
 if __name__ == "__main__":
 
     sys.exit(main())
