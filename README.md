@@ -24,13 +24,14 @@ run from crontab on cloud control node
 
 ```
 usage: run_nightly_batch [-h] [--simpledb-domain SIMPLEDB_DOMAIN]
-                         [--shadow-prefix SHADOW_PREFIX]
+                         [--shadow-prefix SHADOW_PREFIX] [--generate-all]
+                         [--ondemand]
                          eads bucket shadow
 
 run the PDF batch
 
 positional arguments:
-  eads                  URL for crawler to start harvesting EAD XML, won't
+  eads                  URL for crawler to start harvesting EAD XML won't
                         follow redirects
   bucket                s3://bucket[/optional/path] where the generated PDF
                         files go
@@ -43,6 +44,9 @@ optional arguments:
                         "domain"/name of Amazon Simple DB database
   --shadow-prefix SHADOW_PREFIX
                         path the .tar.gz will unpack to
+  --generate-all        build all files
+  --ondemand            use EC2 ondemand rather than EC2 spot market
+
 ```
 
 crontab

@@ -75,10 +75,13 @@ def main(argv=None):
     )
     parser.add_argument('--simpledb-domain',
                         default='ead_last_modified', required=False,
-                        help="\"domain\"/name of Amazon Simple DB database")
+                        help="\"domain\"/name of Amazon Simple DB database",)
     parser.add_argument('--shadow-prefix', default='pdf-shadow',
                         required=False, help="path the .tar.gz will unpack to")
-    parser.add_argument('--generate-all', dest='all', action='store_true')
+    parser.add_argument('--generate-all', dest='all', action='store_true',
+                        help='build all files',)
+    parser.add_argument('--ondemand', dest='ondemand', action='store_true',
+                        help='use EC2 ondemand rather than EC2 spot market',)
 
     if argv is None:
         argv = parser.parse_args()
@@ -107,7 +110,7 @@ def main(argv=None):
         )
         print "batch generated"
 
-        instance, hostname = launch_ec2()
+        instance, hostname = launch_ec2(argv.ondemand)
         print "workhost launched |{0}| |{1}|".format(instance, hostname)
 
         poll_for_ssh(hostname)
@@ -153,39 +156,48 @@ def check_xml(url, last_modified_domain,
               files_to_generate, generate_all=False):
     """compare last_modifed in head with value in  simple DB to see if
     this needs processing"""
-    r = requests.head(url)
-    last_modified_on_oac_header = r.headers['last-modified']
-    last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
-    # if the URL is not in the last_modified_domain
-    # OR last-modified is later than the database;
-    # add the file to the list of files to be processed
-    #
-    # check here for failed batches and add
-    last_modified_item = last_modified_domain.get_item(url)
+    # TODO keep track of batch status and re-run failed batches
+
     if generate_all:
-        add_to_list(url, last_modified_domain,
-                    files_to_generate, last_modified_on_oac_header)
-    elif not last_modified_item:
-        if last_modified_on_oac > datetime.datetime(2014, 10, 01):
+    # force regeneration of all files (skip any expensive steps)
+        add_to_list(url, False, files_to_generate, None)
+    else:
+        # expensive steps
+        # do a HEAD request and check last modified time
+        r = requests.head(url)
+        last_modified_on_oac_header = r.headers['last-modified']
+        last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
+        # look up this URL in the simple DB domain
+        last_modified_item = last_modified_domain.get_item(url)
+
+        # decide if this should get added to the list
+        #
+        if not last_modified_item:
+        # the URL was not seen before
+            if last_modified_on_oac > datetime.datetime(2014, 10, 01):
+            # the file was created before the epic
+                add_to_list(url, last_modified_domain,
+                            files_to_generate, last_modified_on_oac_header)
+        elif last_modified_on_oac > boto.utils.parse_ts(
+                last_modified_item["last_modified"]
+        ):
+        # OR last-modified is later than the database;
             add_to_list(url, last_modified_domain,
                         files_to_generate, last_modified_on_oac_header)
-    elif last_modified_on_oac > boto.utils.parse_ts(
-            last_modified_item["last_modified"]
-    ):
-        add_to_list(url, last_modified_domain,
-                    files_to_generate, last_modified_on_oac_header)
 
 
 def add_to_list(url, last_modified_domain,
                 files_to_generate, last_modified_on_oac_header):
     """modify the files_to_generate list and last_modified_domain"""
-    # the logic here could be better... need to keep a list of succussful
+    # TODO the logic here could be better... need to keep a list of succussful
     # batches so failed batches can be re-tried
     # but then also need a way to detect and mark pathological cases
     print(url)
     files_to_generate.append(url)
-    attrs = {'last_modified': last_modified_on_oac_header, 'batch_id': BATCH}
-    last_modified_domain.put_attributes(url, attrs)
+    if last_modified_domain:
+        attrs = {'last_modified': last_modified_on_oac_header,
+                 'batch_id': BATCH}
+        last_modified_domain.put_attributes(url, attrs)
 
 
 def shadow(bucketurl, archive, prefix):
@@ -224,27 +236,70 @@ def shadow(bucketurl, archive, prefix):
     os.chmod(archive, 0664)
 
 
-def launch_ec2():
-    connection = boto.connect_ec2()
+def launch_ec2(ondemand=False):
+    ami = "ami-05355a6c"
     arn = ("arn:aws:iam::563907706919:"
            "instance-profile/s3-read-write")
-    print "connected, about to reserve"
+    key_name = "majorTom-worker"
+    # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
+    instance_type = 'm3.2xlarge'
+    # 1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
+    # see "xargs"
+
+    if ondemand:
+        instance = launch_instance_ondemand(ami, arn, key_name, instance_type)
+    else:
+        instance =  launch_instance_spot(ami, arn, key_name, instance_type)
+
+    print('Waiting for instance to start...')
+    pp(instance)
+    instance.add_tag('Name', 'OAC_pdfu')
+    instance.add_tag('project', 'OAC_pdfu')
+    if not(instance.public_dns_name):
+        print "needs hostname"
+    while not(instance.public_dns_name):
+        sleep(20)
+        sys.stdout.write('·')
+        instance.update()
+
+    return instance.id, instance.public_dns_name
+
+
+def launch_instance_ondemand(ami, arn, key_name, instance_type):
+    connection = boto.connect_ec2()
+    print "connected, about to launch on demand instance"
+
+    reservation = connection.run_instances(
+        ami,
+        instance_profile_arn=arn,
+        instance_type=instance_type,
+        key_name=key_name,
+    )
+    return reservation.instances[0]
+
+
+def launch_ec2_spot(ami, arn, key_name, instance_type):
+    connection = boto.connect_ec2()
+    print "connected, about to reserve on spot market"
+
     reservation = connection.request_spot_instances(
         "1.00",          # bid at on-demand rate
-        # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
-        "ami-05355a6c",
-        # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
-        key_name="majorTom-worker",
-        # placement="us-east-1b",
-        #   should placement be more open ended?
+        ami,
         instance_profile_arn=arn,
-        instance_type="m3.2xlarge",
-        # 1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
+        instance_type=instance_type,
+        key_name=key_name,
+        # placement="us-east-1b",
     )
     spot_id = str(reservation[0].id)
     print spot_id
+
+    # make a dummy spot_reservation using namedtuple
+    # to jumpstart the polling because
+    # connection.get_all_spot_instance_requests(spot_id)[0]
+    # was not setting spot_reservation.instance_id
     Resholder = namedtuple('Resholder', 'instance_id status')
     spot_reservation = Resholder(None, 'jumpstarting')
+
     # poll for spot instance to start up
     while spot_reservation.instance_id is None:
         pp(spot_reservation.status)
@@ -253,20 +308,9 @@ def launch_ec2():
             spot_id
         )[0]
 
-    instance = connection.get_all_instances(
+    return connection.get_all_instances(
         spot_reservation.instance_id
     )[0].instances[0]
-
-    pp(instance)
-    instance.add_tag('Name', 'OAC_pdfu')
-    instance.add_tag('project', 'OAC_pdfu')
-    if instance.public_dns_name is None:
-        print "needs hostname"
-    while instance.public_dns_name is None:
-        sleep(20)
-        sys.stdout.write('·')
-    hostname = instance.public_dns_name
-    return spot_reservation.instance_id, hostname
 
 
 def poll_for_ssh(host):
@@ -326,15 +370,20 @@ def remote_process_pdf(hostname, batch, instance):
         pp(SETUP_RUN)
         for command in SETUP_RUN:
             run(command)
+
         # TODO: need to deal with the fact that if the spot price exceeds
         # the bid price  that the instance might die during the main run.
-        # This might be a place things stall out
+        # This might be a place things stall out.
+        # but... how?  start a child thread or fork that watches the
+        # instance and makes sure it is still running?
 
         put(batch, '/home/ec2-user/batch.txt')
         pp("remote xargs")
+        # xargs deals with the parallelization;
         run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/pdfu')
         #    xargs                             -P 7
         #         use n-1 processors (leaves one open for forked saxon)
+        #         ** adjust to match the CPU that is being launched **
         #    xargs                                  -n 2
         #         pass 2 arguments at a time to command
     finally:
