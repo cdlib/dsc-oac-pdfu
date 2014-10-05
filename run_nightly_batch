@@ -78,6 +78,8 @@ def main(argv=None):
                         help="\"domain\"/name of Amazon Simple DB database",)
     parser.add_argument('--shadow-prefix', default='pdf-shadow',
                         required=False, help="path the .tar.gz will unpack to")
+    parser.add_argument('--launch-only', dest='launch_only', action='store_true',
+                        help='launch worker for manual batch',)
     parser.add_argument('--generate-all', dest='all', action='store_true',
                         help='build all files',)
     parser.add_argument('--ondemand', dest='ondemand', action='store_true',
@@ -85,6 +87,18 @@ def main(argv=None):
 
     if argv is None:
         argv = parser.parse_args()
+
+    if argv.launch_only:
+        instance, hostname = launch_ec2(argv.ondemand)
+        print "workhost launched |{0}| |{1}|".format(instance, hostname)
+
+        poll_for_ssh(hostname)
+        print "can contact host with ssh to {0}".format(hostname)
+
+        remote_setup(hostname, instance)
+        print("remote machine ready for manual control")
+
+        exit(0)
 
     print BATCH
     sdb = boto.connect_sdb()  	# amazon simple db
@@ -115,6 +129,8 @@ def main(argv=None):
 
         poll_for_ssh(hostname)
         print "can contact host with ssh to {0}".format(hostname)
+
+        remote_setup(hostname, instance)
 
         remote_process_pdf(hostname, batch, instance)
 
@@ -278,7 +294,7 @@ def launch_instance_ondemand(ami, arn, key_name, instance_type):
     return reservation.instances[0]
 
 
-def launch_ec2_spot(ami, arn, key_name, instance_type):
+def launch_instance_spot(ami, arn, key_name, instance_type):
     connection = boto.connect_ec2()
     print "connected, about to reserve on spot market"
 
@@ -337,7 +353,7 @@ def terminate_ec2(instance):
     return connection.get_all_instances(instance)[0].instances[0].terminate()
 
 
-def remote_process_pdf(hostname, batch, instance):
+def remote_setup(hostname, instance):
     """use fabric to run commands on the remote working node"""
     SETUP_SUDO = [
         'yum -y update',
@@ -370,6 +386,8 @@ def remote_process_pdf(hostname, batch, instance):
         pp(SETUP_RUN)
         for command in SETUP_RUN:
             run(command)
+    finally:
+        fabric.network.disconnect_all()
 
         # TODO: need to deal with the fact that if the spot price exceeds
         # the bid price  that the instance might die during the main run.
@@ -377,6 +395,12 @@ def remote_process_pdf(hostname, batch, instance):
         # but... how?  start a child thread or fork that watches the
         # instance and makes sure it is still running?
 
+
+def remote_process_pdf(hostname, batch, instance):
+    env.host_string = hostname
+    # fabric docs say fabric could hang if a command fails and recommend
+    # to use try/finally
+    try:
         put(batch, '/home/ec2-user/batch.txt')
         pp("remote xargs")
         # xargs deals with the parallelization;
