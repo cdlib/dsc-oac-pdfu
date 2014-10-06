@@ -1,8 +1,16 @@
-http://pybrary.net/pyPdf/pyPdf-1.13.tar.gz
 BeautifulSoup==3.2.1
+Fabric==1.9.0
 Pillow==2.3.1
+argparse==1.2.1
+boto==2.32.1
+ecdsa==0.11
 html5lib==0.999
+lxml==3.3.5
+paramiko==1.14.0
 pisa==3.0.33
+pyPdf==1.13
+pycrypto==2.6.1
 reportlab==2.7
+requests==2.3.0
 six==1.6.1
 xhtml2pdf==0.0.5
