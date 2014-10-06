@@ -44,6 +44,7 @@ optional arguments:
                         "domain"/name of Amazon Simple DB database
   --shadow-prefix SHADOW_PREFIX
                         path the .tar.gz will unpack to
+  --launch-only         launch worker for manual batch
   --generate-all        build all files
   --ondemand            use EC2 ondemand rather than EC2 spot market
 
@@ -70,3 +71,34 @@ Requires `oac-ead-to-pdf` and some python modules, which are installed into a vi
 ```bash
 ./init.sh
 ```
+
+## re-run for OAC
+
+`--generate-all` does not work for OAC...
+
+to sort from smallest EAD file to the largest EAD file, you must run a command
+on the machine with the EAD files.
+
+```
+find prime2002/ -type f -printf "%s\t%p\n" | sort -n > sorted-prime.txt
+```
+
+edit with `vi`
+
+```
+:%s,prime2002/,,
+:%s,.xml$,,
+```
+
+create the batch file
+
+```
+cat sorted-prime.txt | xargs -I {} echo "http://voro.cdlib.org/oac-ead/prime2002/{}.xml s3://pdf-generation/pdf/{}.pdf" > sbatch.txt
+```
+
+on remote host
+```
+xargs -a sbatch.txt -P 7 -n 2 ./pdfu/pdfu
+```
+
+it will die in the end, but we did the best we can
