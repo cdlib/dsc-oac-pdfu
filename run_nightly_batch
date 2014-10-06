@@ -25,7 +25,7 @@ Epic reset to Dec 1, 2013 and simbledb domain re-set in order to
 regenerate some backfiles.  Need to switch simble db to record what
 actually gets created; not what gets batched.
 
-Epic reset to October 1, 2014.  --generate-all added to rebuild files
+Epic reset to October 5, 2014.  --generate-all added to rebuild files
 
 """
 
@@ -190,7 +190,7 @@ def check_xml(url, last_modified_domain,
         #
         if not last_modified_item:
         # the URL was not seen before
-            if last_modified_on_oac > datetime.datetime(2014, 10, 01):
+            if last_modified_on_oac > datetime.datetime(2014, 10, 5):
             # the file was created before the epic
                 add_to_list(url, last_modified_domain,
                             files_to_generate, last_modified_on_oac_header)
