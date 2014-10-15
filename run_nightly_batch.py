@@ -369,6 +369,7 @@ def remote_setup(hostname, instance):
         'yum -y install libtiff-devel',
         'yum -y install lcms-devel',
         'yum -y install mercurial',
+        'yum -y install libxslt-devel libxml2-devel',
         'echo halt | at now + 36 hours',
     ]
     SETUP_RUN = [

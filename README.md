@@ -18,12 +18,12 @@ optional arguments:
   --loglevel LOGLEVEL
 ```
 
-## `run_nightly_batch`
+## `run_nightly_batch.py`
 
 run from crontab on cloud control node
 
 ```
-usage: run_nightly_batch [-h] [--simpledb-domain SIMPLEDB_DOMAIN]
+usage: run_nightly_batch.py [-h] [--simpledb-domain SIMPLEDB_DOMAIN]
                          [--shadow-prefix SHADOW_PREFIX] [--generate-all]
                          [--ondemand]
                          eads bucket shadow
@@ -60,7 +60,7 @@ crontab
 #         day of week    0-7 (0 or 7 is Sun, or use names)
 # Eastern timzone
 
-04 01 * * * ///appstrap/cronic/cronic ///code/pdfu/run_nightly_batch http:///oac-ead/prime2002/ s3:///pdf/ /usr/share/nginx/html/pdf-shadow.tar.gz 
+04 01 * * * ///appstrap/cronic/cronic ///code/pdfu/run_nightly_batch.py http:///oac-ead/prime2002/ s3:///pdf/ /usr/share/nginx/html/pdf-shadow.tar.gz 
 
 ```
 
