@@ -27,6 +27,8 @@ actually gets created; not what gets batched.
 
 Epic reset to October 5, 2014.  --generate-all added to rebuild files
 
+Add --shadow-only command line paramater
+
 """
 
 import argparse
@@ -38,7 +40,7 @@ import boto.utils
 import boto
 import datetime
 from time import sleep
-from fabric.api import env, run, sudo, put
+from fabric.api import env, run, sudo, put, local
 import paramiko
 import fabric
 import StringIO
@@ -80,6 +82,8 @@ def main(argv=None):
                         required=False, help="path the .tar.gz will unpack to")
     parser.add_argument('--launch-only', dest='launch_only', action='store_true',
                         help='launch worker for manual batch',)
+    parser.add_argument('--shadow-only', dest='shadow_only', action='store_true',
+                        help='just reshadow all',)
     parser.add_argument('--generate-all', dest='all', action='store_true',
                         help='build all files',)
     parser.add_argument('--ondemand', dest='ondemand', action='store_true',
@@ -107,12 +111,13 @@ def main(argv=None):
 
     print("checking for files to generate")
 
-    check_url(
-        argv.eads[0],
-        last_modified_domain,
-        files_to_generate,
-        generate_all=argv.all,
-    )
+    if not argv.shadow_only:
+        check_url(
+            argv.eads[0],
+            last_modified_domain,
+            files_to_generate,
+            generate_all=argv.all,
+        )
 
     if files_to_generate:
         print "there are files to generate"
@@ -248,6 +253,7 @@ def shadow(bucketurl, archive, prefix):
             tar.addfile(tarinfo=info, fileobj=shadowfile)
             shadowfile.close()
     tmp.flush()
+    # local('/bin/tar ztf {0}'.format(tmp.name), capture=False)
     shutil.move(tmp.name, archive)
     os.chmod(archive, 0664)
 
