@@ -59,26 +59,14 @@ def main(argv=None):
     pdf_dir = os.path.realpath(os.path.abspath(os.path.join(os.path.split(
         inspect.getfile(inspect.currentframe())
     )[0], "oac-ead-to-pdf")))
+
+    sys.path.insert(0, pdf_dir)
     os.environ['CLASSPATH'] = u''.join([
         pdf_dir,
         '/javalib/lib/saxonb-8.9.jar:',
         pdf_dir,
         '/javalib/classes',
     ])
-    virtualenv_dir = os.path.realpath(os.path.abspath(os.path.join(
-        os.path.split(
-            inspect.getfile(inspect.currentframe())
-        )[0], "ve/lib/python2.6/site-packages"
-    )))
-    for cmd_subfolder in [pdf_dir, virtualenv_dir]:
-        if cmd_subfolder not in sys.path:
-            sys.path.insert(0, cmd_subfolder)
-
-    # cmd_folder = os.path.dirname(os.path.abspath(__file__))
-    # DO NOT USE __file__ !!!
-    # __file__ fails if script is called in different ways on Windows
-    # __file__ fails if someone does os.chdir() before
-    # sys.argv[0] also fails because it doesn't not always contains the path
 
     # activate virtualenv
     # http://stackoverflow.com/a/14792407/1763984

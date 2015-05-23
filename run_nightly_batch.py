@@ -29,6 +29,8 @@ Epic reset to October 5, 2014.  --generate-all added to rebuild files
 
 Add --shadow-only command line paramater
 
+Epic reset to May 23, 2015
+
 """
 
 import argparse
@@ -365,9 +367,7 @@ def remote_setup(hostname, instance):
         'yum -y update',
         'yum -y install git',
         'yum -y groupinstall "Development Tools"',
-        'easy_install pip',
-        'pip install --no-use-wheel virtualenv',
-        'yum -y install python-devel',
+        'yum -y install python27-devel python27-virtualenv',
         'yum -y install ncurses-devel',
         'yum -y install openssl-devel',
         'yum -y install libjpeg-devel',
@@ -380,7 +380,7 @@ def remote_setup(hostname, instance):
     ]
     SETUP_RUN = [
         'git clone https://github.com/tingletech/pdfu.git',
-        './pdfu/init.sh',
+        './pdfu/init.sh python2.7',
     ]
     env.host_string = hostname
     # fabric docs say fabric could hang if a command fails and recommend
@@ -411,6 +411,7 @@ def remote_process_pdf(hostname, batch, instance):
         put(batch, '/home/ec2-user/batch.txt')
         pp("remote xargs")
         # xargs deals with the parallelization;
+        run('source ./pdfu/ve/bin/activate')
         run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/pdfu')
         #    xargs                             -P 7
         #         use n-1 processors (leaves one open for forked saxon)
