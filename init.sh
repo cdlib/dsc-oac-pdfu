@@ -14,6 +14,6 @@ set +u
 . ve/bin/activate
 set -u
 pip install --no-use-wheel -r requirements.txt
-hg clone https://code.google.com/p/oac-ead-to-pdf/
+git clone https://github.com/mredar/oac-ead-to-pdf.git
 cd oac-ead-to-pdf
 python fix_relative_css_paths.py
