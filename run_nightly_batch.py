@@ -412,7 +412,7 @@ def remote_process_pdf(hostname, batch, instance):
         pp("remote xargs")
         # xargs deals with the parallelization;
         run('source ./pdfu/ve/bin/activate')
-        run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/pdfu')
+        run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/ve/bin/python ./pdfu/pdfu')
         #    xargs                             -P 7
         #         use n-1 processors (leaves one open for forked saxon)
         #         ** adjust to match the CPU that is being launched **
