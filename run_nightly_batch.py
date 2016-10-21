@@ -256,8 +256,18 @@ def shadow(bucketurl, archive, prefix):
             shadowfile.close()
     tmp.flush()
     # local('/bin/tar ztf {0}'.format(tmp.name), capture=False)
-    shutil.move(tmp.name, archive)
-    os.chmod(archive, 0664)
+    if archive.startswith("s3://"):
+        parts = urlparse.urlsplit(archive)
+        # SplitResult
+        # (scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
+        s3 = boto.connect_s3()
+        bucket = s3.get_bucket(parts.netloc)
+        key = bucket.new_key(parts.path)
+        key.set_contents_from_filename(tmp.name)
+        key.set_acl('public-read')
+    else:
+        shutil.move(tmp.name, archive)
+        os.chmod(archive, 0664)
 
 
 def launch_ec2(ondemand=False):
@@ -448,7 +458,7 @@ if __name__ == "__main__":
 
 
 """
-   Copyright (c) 2014, Regents of the University of California
+   Copyright (c) 2016, Regents of the University of California
    All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
