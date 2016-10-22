@@ -254,20 +254,20 @@ def shadow(bucketurl, archive, prefix):
             )
             tar.addfile(tarinfo=info, fileobj=shadowfile)
             shadowfile.close()
+    tar.close()
     tmp.flush()
+    os.chmod(tmp.name, 0664)
     # local('/bin/tar ztf {0}'.format(tmp.name), capture=False)
     if archive.startswith("s3://"):
-        parts = urlparse.urlsplit(archive)
+        inner_parts = urlparse.urlsplit(archive)
         # SplitResult
         # (scheme='s3', netloc='test.pdf', path='/dkd', query='', fragment='')
-        s3 = boto.connect_s3()
-        bucket = s3.get_bucket(parts.netloc)
-        key = bucket.new_key(parts.path)
-        key.set_contents_from_filename(tmp.name)
-        key.set_acl('public-read')
+        inner_bucket = s3.get_bucket(inner_parts.netloc)
+        inner_key = inner_bucket.new_key(inner_parts.path)
+        inner_key.set_contents_from_filename(tmp.name)
+        inner_key.set_acl('public-read')
     else:
         shutil.move(tmp.name, archive)
-        os.chmod(archive, 0664)
 
 
 def launch_ec2(ondemand=False):
