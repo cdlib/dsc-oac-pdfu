@@ -393,6 +393,7 @@ def remote_setup(hostname, instance):
         './pdfu/init.sh python2.7',
     ]
     env.host_string = hostname
+    env.user = 'ec2-user'
     # fabric docs say fabric could hang if a command fails and recommend
     # to use try/finally
 
@@ -415,6 +416,7 @@ def remote_setup(hostname, instance):
 
 def remote_process_pdf(hostname, batch, instance):
     env.host_string = hostname
+    env.user = 'ec2-user'
     # fabric docs say fabric could hang if a command fails and recommend
     # to use try/finally
     try:
