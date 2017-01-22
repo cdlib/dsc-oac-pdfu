@@ -29,7 +29,7 @@ Epic reset to October 5, 2014.  --generate-all added to rebuild files
 
 Add --shadow-only command line paramater
 
-Epic reset to May 23, 2015
+Epic reset to October 1, 2016
 
 """
 
@@ -197,7 +197,7 @@ def check_xml(url, last_modified_domain,
         #
         if not last_modified_item:
         # the URL was not seen before
-            if last_modified_on_oac > datetime.datetime(2014, 10, 5):
+            if last_modified_on_oac > datetime.datetime(2016, 10, 1):
             # the file was created before the epic
                 add_to_list(url, last_modified_domain,
                             files_to_generate, last_modified_on_oac_header)
