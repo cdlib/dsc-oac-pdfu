@@ -14,7 +14,7 @@ set +u
 . ve/bin/activate
 set -u
 unset PYTHON_INSTALL_LAYOUT
-pip install --no-use-wheel -r requirements.txt
+pip install -r requirements.txt
 git clone https://github.com/mredar/oac-ead-to-pdf.git
 cd oac-ead-to-pdf
 python fix_relative_css_paths.py
