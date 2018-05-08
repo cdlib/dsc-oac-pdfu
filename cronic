@@ -25,6 +25,10 @@ TRACE=$LOGDIR/${logname}.$TIMESTAMP.trc
 ionice -c3 -p$$ 
 renice -n 10 $$ > /dev/null
 
+PATH=$HOME/pdfu/ve/bin:$PATH:$HOME/.local/bin:$HOME/bin
+
+export PATH
+
 # run command
 set +e
 "$@" >"$OUT" 2>"$TRACE"
