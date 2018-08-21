@@ -31,6 +31,8 @@ Add --shadow-only command line paramater
 
 Epic reset to October 1, 2016
 
+Epic reset to April 1, 2018
+
 """
 
 import argparse
@@ -197,7 +199,7 @@ def check_xml(url, last_modified_domain,
         #
         if not last_modified_item:
         # the URL was not seen before
-            if last_modified_on_oac > datetime.datetime(2016, 10, 1):
+            if last_modified_on_oac > datetime.datetime(2018, 4, 1):
             # the file was created before the epic
                 add_to_list(url, last_modified_domain,
                             files_to_generate, last_modified_on_oac_header)
@@ -207,6 +209,9 @@ def check_xml(url, last_modified_domain,
         # OR last-modified is later than the database;
             add_to_list(url, last_modified_domain,
                         files_to_generate, last_modified_on_oac_header)
+
+# [pdfu]$ aws sdb delete-domain --domain-name ead_last_modified --region us-east-1
+# [pdfu]$ aws sdb create-domain --domain-name ead_last_modified --region us-east-1
 
 
 def add_to_list(url, last_modified_domain,
