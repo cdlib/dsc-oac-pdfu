@@ -390,6 +390,7 @@ def terminate_ec2(instance):
 def remote_setup(hostname, instance):
     """use fabric to run commands on the remote working node"""
     SETUP_SUDO = [
+        'echo halt | at now + 36 hours',
         'yum -y update',
         'yum -y install git',
         'yum -y groupinstall "Development Tools"',
@@ -402,7 +403,6 @@ def remote_setup(hostname, instance):
         'yum -y install lcms-devel',
         'yum -y install mercurial',
         'yum -y install libxslt-devel libxml2-devel',
-        'echo halt | at now + 36 hours',
     ]
     SETUP_RUN = [
         'git clone https://github.com/tingletech/pdfu.git',
