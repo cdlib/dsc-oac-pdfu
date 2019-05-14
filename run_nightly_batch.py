@@ -292,14 +292,25 @@ def launch_ec2(ondemand=False):
 
     print('Waiting for instance to start...')
     pp(instance)
-    instance.add_tag('Name', 'OAC_pdfu')
-    instance.add_tag('project', 'OAC_pdfu')
+
+    status = instance.update()
+    while status == 'pending':
+        sleep(10)
+        sys.stdout.write('·')
+        status = instance.update()
+
+    if status == 'running':
+        instance.add_tag('Name', 'OAC_pdfu')
+        instance.add_tag('project', 'OAC_pdfu')
+    else
+        print('invalid instance status')
+        exit(1)
+
     if not(instance.public_dns_name):
         print "needs hostname"
     while not(instance.public_dns_name):
         sleep(20)
         sys.stdout.write('·')
-        instance.update()
 
     return instance.id, instance.public_dns_name
 
