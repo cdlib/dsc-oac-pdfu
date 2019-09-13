@@ -276,7 +276,7 @@ def shadow(bucketurl, archive, prefix):
 
 
 def launch_ec2(ondemand=False):
-    ami = "ami-05355a6c"
+    ami = "ami-0b69ea66ff7391e80"
     arn = ("arn:aws:iam::563907706919:"
            "instance-profile/s3-read-write")
     key_name = "majorTom-worker"
@@ -302,7 +302,7 @@ def launch_ec2(ondemand=False):
     if status == 'running':
         instance.add_tag('Name', 'OAC_pdfu')
         instance.add_tag('project', 'OAC_pdfu')
-    else
+    else:
         print('invalid instance status')
         exit(1)
 
@@ -392,21 +392,14 @@ def remote_setup(hostname, instance):
     SETUP_SUDO = [
         'echo halt | at now + 36 hours',
         'yum -y update',
-        'yum -y install git',
+        'amazon-linux-extras install -y corretto8',
         'yum -y groupinstall "Development Tools"',
-        'yum -y install python27-devel python27-virtualenv',
-        'yum -y install ncurses-devel',
-        'yum -y install openssl-devel',
-        'yum -y install libjpeg-devel',
-        'yum -y install freetype-devel',
-        'yum -y install libtiff-devel',
-        'yum -y install lcms-devel',
-        'yum -y install mercurial',
-        'yum -y install libxslt-devel libxml2-devel',
+        # 'yum -y install python27-devel python27-virtualenv',
+        'yum -y install git ncurses-devel openssl-devel libjpeg-devel freetype-devel libtiff-devel lcms-devel mercurial libxslt-devel libxml2-devel libX11-devel',
     ]
     SETUP_RUN = [
         'git clone https://github.com/tingletech/pdfu.git',
-        './pdfu/init.sh python2.7',
+        './pdfu/init.sh',
     ]
     env.host_string = hostname
     env.user = 'ec2-user'
@@ -417,6 +410,7 @@ def remote_setup(hostname, instance):
         pp(SETUP_SUDO)
         for command in SETUP_SUDO:
             sudo(command)
+            sleep(1)
         pp(SETUP_RUN)
         for command in SETUP_RUN:
             run(command)
