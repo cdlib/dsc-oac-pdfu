@@ -3,13 +3,11 @@ set -eu
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )" # http://stackoverflow.com/questions/59895
 cd $DIR
 
-if [[ ! -z ${1-} ]]; then
-    extra_opts="-p $1"
-else
-    extra_opts=""
-fi
 
-virtualenv-2.7 $extra_opts ve
+wget https://bitbucket.org/squeaky/portable-pypy/downloads/pypy-7.1.1-linux_x86_64-portable.tar.bz2
+sha256sum -c pypy-7.1.1-linux_x86_64-portable.tar.bz2.sha256
+tar jfx pypy-7.1.1-linux_x86_64-portable.tar.bz2
+./pypy-7.1.1-linux_x86_64-portable/bin/virtualenv-pypy ve
 set +u
 . ve/bin/activate
 set -u
