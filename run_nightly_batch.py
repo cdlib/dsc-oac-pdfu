@@ -33,18 +33,22 @@ Epic reset to October 1, 2016
 
 Epic reset to April 1, 2018
 
+October 7, 2019 -- simple-db and epic concept removed -- `shadow()` gets ran twice
+
 """
 
 import argparse
 from lxml.html import parse
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import os
 import sys
 import boto.utils
 import boto
 import datetime
 from time import sleep
-from fabric.api import env, run, sudo, put, local
+from fabric.api import env, run, sudo, put
 import paramiko
 import fabric
 import StringIO
@@ -59,7 +63,6 @@ from collections import namedtuple
 from pprint import pprint as pp
 
 BATCH = datetime.datetime.now().isoformat()
-
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="run the PDF batch")
@@ -79,9 +82,6 @@ def main(argv=None):
         nargs=1,
         help=".tar.gz filename to store \"shadow\" file archive for XTF"
     )
-    parser.add_argument('--simpledb-domain',
-                        default='ead_last_modified', required=False,
-                        help="\"domain\"/name of Amazon Simple DB database",)
     parser.add_argument('--shadow-prefix', default='pdf-shadow',
                         required=False, help="path the .tar.gz will unpack to")
     parser.add_argument('--launch-only', dest='launch_only', action='store_true',
@@ -109,29 +109,41 @@ def main(argv=None):
         exit(0)
 
     print BATCH
-    sdb = boto.connect_sdb()  	# amazon simple db
-    last_modified_domain = sdb.get_domain(argv.simpledb_domain)
+
+    print("checking PDF files on S3 to update shadow file and get list of current PDFs")
+    current_pdfs = shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
+    last_modified_domain = current_pdfs
     files_to_generate = []
 
-    print("checking for files to generate")
-
     if not argv.shadow_only:
-        check_url(
-            argv.eads[0],
-            last_modified_domain,
-            files_to_generate,
-            generate_all=argv.all,
-        )
+        print("checking EAD for PDF files to generate")
+        with requests.Session() as session:
+            # set up session and Retry for EAD crawling
+            retry = Retry(
+                #https://urllib3.readthedocs.io/en/latest/reference/urllib3.util.html
+                connect=3,
+                backoff_factor=1,
+            )
+            adapter = HTTPAdapter(max_retries=retry)
+            session.mount('http://', adapter)
+            session.mount('https://', adapter)
+            check_url(
+                argv.eads[0],
+                last_modified_domain,
+                files_to_generate,
+                generate_all=argv.all,
+                session=session,
+            )
 
-    if files_to_generate:
-        print "there are files to generate"
+    if files_to_generate:  ## will be false if in shadow_only mode
+        print("there are files to generate")
 
         batch = generate_batch(
             files_to_generate,
             argv.eads[0],
             argv.bucket[0],
         )
-        print "batch generated"
+        print("batch generated")
 
         instance, hostname = launch_ec2(argv.ondemand)
         print "workhost launched |{0}| |{1}|".format(instance, hostname)
@@ -146,25 +158,25 @@ def main(argv=None):
         print "okay; done, terminate workhost"
         terminate_ec2(instance)
 
-    print "updating shadow file"
-    shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
+        print "updating shadow file for a second time"
+        shadow(argv.bucket[0], argv.shadow[0], argv.shadow_prefix)
 
 
 def check_url(url, last_modified_domain,
-              files_to_generate, generate_all=False):
+              files_to_generate, generate_all=False, session=None):
     """check if a URL is an XML file or directory based on the string value """
     dir, ext = os.path.splitext(url)
     # prime 2002 directory will have only .xml files or sub-directories
     if ext == '.xml':
         check_xml(url, last_modified_domain,
-                  files_to_generate, generate_all=generate_all)
+                  files_to_generate, generate_all=generate_all, session=session)
     elif not ext:
         check_dir(url, last_modified_domain,
-                  files_to_generate, generate_all=generate_all)
+                  files_to_generate, generate_all=generate_all, session=session)
 
 
 def check_dir(url, last_modified_domain,
-              files_to_generate, generate_all=False):
+              files_to_generate, generate_all=False, session=None):
     """scrape links from directory listing"""
     sys.stdout.write('•')
     doc = parse(url).getroot()
@@ -174,14 +186,13 @@ def check_dir(url, last_modified_domain,
         # skip links back to myself and don't go up directories
         if not link == url and link.startswith(url):
             check_url(link, last_modified_domain,
-                      files_to_generate, generate_all=generate_all)
+                      files_to_generate, generate_all=generate_all, session=session)
 
 
 def check_xml(url, last_modified_domain,
-              files_to_generate, generate_all=False):
-    """compare last_modifed in head with value in  simple DB to see if
+              files_to_generate, generate_all=False, session=None):
+    """compare last_modifed in head with PDFs on S3
     this needs processing"""
-    # TODO keep track of batch status and re-run failed batches
 
     if generate_all:
     # force regeneration of all files (skip any expensive steps)
@@ -189,22 +200,23 @@ def check_xml(url, last_modified_domain,
     else:
         # expensive steps
         # do a HEAD request and check last modified time
-        r = requests.head(url)
+        r = session.head(url)
         last_modified_on_oac_header = r.headers['last-modified']
+        r.close()
         last_modified_on_oac = boto.utils.parse_ts(last_modified_on_oac_header)
         # look up this URL in the simple DB domain
-        last_modified_item = last_modified_domain.get_item(url)
+        new_key = url.replace('http://voro.cdlib.org/oac-ead/prime2002/', 'pdf/')
+        new_key = new_key.replace('.xml', '.pdf')
+        last_modified_item = last_modified_domain.get(new_key)
 
         # decide if this should get added to the list
         #
         if not last_modified_item:
         # the URL was not seen before
-            if last_modified_on_oac > datetime.datetime(2018, 4, 1):
-            # the file was created before the epic
-                add_to_list(url, last_modified_domain,
-                            files_to_generate, last_modified_on_oac_header)
+            add_to_list(url, last_modified_domain,
+                        files_to_generate, last_modified_on_oac_header)
         elif last_modified_on_oac > boto.utils.parse_ts(
-                last_modified_item["last_modified"]
+                str(last_modified_item)
         ):
         # OR last-modified is later than the database;
             add_to_list(url, last_modified_domain,
@@ -222,10 +234,6 @@ def add_to_list(url, last_modified_domain,
     # but then also need a way to detect and mark pathological cases
     print(url)
     files_to_generate.append(url)
-    if last_modified_domain:
-        attrs = {'last_modified': last_modified_on_oac_header,
-                 'batch_id': BATCH}
-        last_modified_domain.put_attributes(url, attrs)
 
 
 def shadow(bucketurl, archive, prefix):
@@ -238,6 +246,7 @@ def shadow(bucketurl, archive, prefix):
     bucket = s3.get_bucket(parts.netloc)
     tmp = tempfile.NamedTemporaryFile(delete=False)
     tar = tarfile.open(fileobj=tmp, mode="w:gz")
+    current_pdfs = {}
     for key in bucket.list():
         # look for pdfs that match the user supplied path
         if (key.name.endswith(u'.pdf') and not
@@ -258,6 +267,7 @@ def shadow(bucketurl, archive, prefix):
                 boto.utils.parse_ts(key.last_modified).timetuple()
             )
             tar.addfile(tarinfo=info, fileobj=shadowfile)
+            current_pdfs[key.name] = key.last_modified
             shadowfile.close()
     tar.close()
     tmp.flush()
@@ -273,6 +283,8 @@ def shadow(bucketurl, archive, prefix):
         inner_key.set_acl('public-read')
     else:
         shutil.move(tmp.name, archive)
+
+    return current_pdfs
 
 
 def launch_ec2(ondemand=False):
