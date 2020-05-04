@@ -144,6 +144,7 @@ def main(argv=None):
             argv.bucket[0],
         )
         print("batch generated")
+        print(batch.getvalue())
 
         instance, hostname = launch_ec2(argv.ondemand)
         print "workhost launched |{0}| |{1}|".format(instance, hostname)
@@ -321,6 +322,7 @@ def launch_ec2(ondemand=False):
     if not(instance.public_dns_name):
         print "needs hostname"
     while not(instance.public_dns_name):
+        # TODO gets stuck in a loop right here sometimes
         sleep(20)
         sys.stdout.write('·')
 
@@ -402,7 +404,7 @@ def terminate_ec2(instance):
 def remote_setup(hostname, instance):
     """use fabric to run commands on the remote working node"""
     SETUP_SUDO = [
-        'echo halt | at now + 36 hours',
+        'echo poweroff | at now + 12 hours',
         'yum -y update',
         'amazon-linux-extras install -y corretto8',
         'yum -y groupinstall "Development Tools"',
@@ -446,7 +448,10 @@ def remote_process_pdf(hostname, batch, instance):
         pp("remote xargs")
         # xargs deals with the parallelization;
         run('source ./pdfu/ve/bin/activate')
-        run('xargs -a /home/ec2-user/batch.txt -P 7 -n 2 ./pdfu/ve/bin/python ./pdfu/pdfu')
+        command =  'xargs -a /home/ec2-user/batch.txt -P 7 -n 2 '
+        command += 'timeout --preserve-status --kill-after=30 600 '
+        command += './pdfu/ve/bin/python ./pdfu/pdfu'
+        run(command)
         #    xargs                             -P 7
         #         use n-1 processors (leaves one open for forked saxon)
         #         ** adjust to match the CPU that is being launched **
