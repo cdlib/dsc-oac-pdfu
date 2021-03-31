@@ -4,7 +4,7 @@ argparse==1.2.1
 boto==2.32.1
 ecdsa==0.11
 html5lib==0.9999999
-lxml==3.3.5
+lxml==4.6.3
 pisa==3.0.33
 pyPdf==1.13
 reportlab==2.7
