@@ -1,5 +1,5 @@
 BeautifulSoup==3.2.1
-Pillow==2.9.0  # last version that correctly generates cover pages
+Pillow==8.3.2  # last version that correctly generates cover pages
 argparse==1.2.1
 boto==2.32.1
 ecdsa==0.11
