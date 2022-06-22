@@ -289,12 +289,12 @@ def shadow(bucketurl, archive, prefix):
 
 
 def launch_ec2(ondemand=False):
-    ami = "ami-0b69ea66ff7391e80"
+    ami = "ami-098e42ae54c764c35"
     arn = ("arn:aws:iam::563907706919:"
            "instance-profile/s3-read-write")
-    key_name = "majorTom-worker"
+    key_name = "pdfu-worker"
     # check http://aws.amazon.com/amazon-linux-ami/ for current AMI
-    instance_type = 'm3.2xlarge'
+    instance_type = 'm5.2xlarge'
     # 1.00/hr on demand    8vCPU       26 ECPU     30 G RAM
     # see "xargs"
 
@@ -306,6 +306,7 @@ def launch_ec2(ondemand=False):
     print('Waiting for instance to start...')
     pp(instance)
 
+    sleep(10)
     status = instance.update()
     while status == 'pending':
         sleep(10)
@@ -319,14 +320,14 @@ def launch_ec2(ondemand=False):
         print('invalid instance status')
         exit(1)
 
-    if not(instance.public_dns_name):
+    if not(instance.private_dns_name):
         print "needs hostname"
-    while not(instance.public_dns_name):
+    while not(instance.private_dns_name):
         # TODO gets stuck in a loop right here sometimes
         sleep(20)
         sys.stdout.write('·')
 
-    return instance.id, instance.public_dns_name
+    return instance.id, instance.private_dns_name
 
 
 def launch_instance_ondemand(ami, arn, key_name, instance_type):
@@ -338,12 +339,14 @@ def launch_instance_ondemand(ami, arn, key_name, instance_type):
         instance_profile_arn=arn,
         instance_type=instance_type,
         key_name=key_name,
+        subnet_id='subnet-1bbe676c',
     )
     return reservation.instances[0]
 
 
 def launch_instance_spot(ami, arn, key_name, instance_type):
     connection = boto.connect_ec2()
+    #import pdb; pdb.set_trace();
     print "connected, about to reserve on spot market"
 
     reservation = connection.request_spot_instances(
@@ -352,7 +355,7 @@ def launch_instance_spot(ami, arn, key_name, instance_type):
         instance_profile_arn=arn,
         instance_type=instance_type,
         key_name=key_name,
-        # placement="us-east-1b",
+        subnet_id='subnet-1bbe676c',
     )
     spot_id = str(reservation[0].id)
     print spot_id
@@ -449,7 +452,7 @@ def remote_process_pdf(hostname, batch, instance):
         # xargs deals with the parallelization;
         run('source ./pdfu/ve/bin/activate')
         command =  'xargs -a /home/ec2-user/batch.txt -P 7 -n 2 '
-        command += 'timeout --preserve-status --kill-after=30 600 '
+        command += 'timeout --preserve-status --kill-after=30 1h '
         command += './pdfu/ve/bin/python ./pdfu/pdfu'
         run(command)
         #    xargs                             -P 7
