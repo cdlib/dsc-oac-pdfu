@@ -415,7 +415,7 @@ def remote_setup(hostname, instance):
         'yum -y install git ncurses-devel openssl-devel libjpeg-devel freetype-devel libtiff-devel lcms-devel mercurial libxslt-devel libxml2-devel libX11-devel',
     ]
     SETUP_RUN = [
-        'git clone https://github.com/cdlib/dsc-oac-pdfu.git',
+        'git clone https://github.com/cdlib/dsc-oac-pdfu.git pdfu',
         './pdfu/init.sh',
     ]
     env.host_string = hostname
