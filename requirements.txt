@@ -8,6 +8,6 @@ lxml==3.3.5
 pisa==3.0.33
 pyPdf==1.13
 reportlab==2.7
-requests==2.22.0
+requests==2.31.0
 six==1.9
 xhtml2pdf==0.0.5
